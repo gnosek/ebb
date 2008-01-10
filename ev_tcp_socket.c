@@ -1,4 +1,3 @@
-#include "ev_tcp_socket.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -9,7 +8,12 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <ev.h>
+#include <glib.h>
+
 #include <assert.h>
+
+#include "ev_tcp_socket.h"
 
 int misc_lookup_host(char *address, struct in_addr *addr)
 {
@@ -22,15 +26,15 @@ int misc_lookup_host(char *address, struct in_addr *addr)
   return -1;
 }
 
-ev_tcp_client* ev_tcp_client_new(ev_tcp_server *parent)
+ev_tcp_client* ev_tcp_client_new(ev_tcp_server *server)
 {
   socklen_t len;
   ev_tcp_client *client;
   
   client = g_new0(ev_tcp_client, 1);
-  client->error_cb = parent->error_cb;
-  client->parent = parent;
-  client->fd = accept(parent->fd, (struct sockaddr*)&(client->sockaddr), &len);
+  client->error_cb = server->error_cb;
+  client->parent = server;
+  client->fd = accept(server->fd, (struct sockaddr*)&(client->sockaddr), &len);
   if(client->fd < 0) {
     client->error_cb(EV_TCP_ERROR, "Could not get client socket");
     ev_tcp_client_free(client);
@@ -47,14 +51,19 @@ ev_tcp_client* ev_tcp_client_new(ev_tcp_server *parent)
 
 void ev_tcp_client_free(ev_tcp_client *client)
 {
-  close(client->fd);
+  ev_tcp_client_close(client);
   free(client);
 }
 
-ev_tcp_socket* ev_tcp_server_new(ev_tcp_error_cb error_cb)
+void ev_tcp_client_close(ev_tcp_client *client)
+{
+  close(client->fd);
+}
+
+ev_tcp_server* ev_tcp_server_new(ev_tcp_error_cb error_cb)
 {
   int r;
-  ev_tcp_socket *server = g_new0(ev_tcp_server, 1);
+  ev_tcp_server *server = g_new0(ev_tcp_server, 1);
   
   server->fd = socket(PF_INET, SOCK_STREAM, 0);
   server->error_cb = error_cb;
@@ -158,21 +167,21 @@ void unit_test_error(int severity, char *message)
   if(severity == EV_TCP_FATAL) { exit(1); }
 }
 
-void unit_test_accept(ev_tcp_socket *parent, ev_tcp_socket *child)
+void unit_test_accept(ev_tcp_server *server, ev_tcp_client *client)
 {
-  ev_tcp_socket_close(child);
-  ev_tcp_socket_close(parent);
+  ev_tcp_client_close(client);
+  ev_tcp_server_close(server);
 }
 
 int main(void)
 {
-  ev_tcp_socket *socket;
+  ev_tcp_server *server;
   
-  socket = ev_tcp_socket_new(unit_test_error);
+  server = ev_tcp_server_new(unit_test_error);
   
   if(0 == fork()) {
-    ev_tcp_socket_listen(socket, "localhost", 31337, 1024, unit_test_accept);
-    ev_tcp_socket_close(socket);
+    ev_tcp_server_listen(server, "localhost", 31337, 1024, unit_test_accept);
+    ev_tcp_server_close(server);
   } else {
     sleep(1);
     printf("netstat: %s\n", 0 == system("netstat -an | grep LISTEN | grep 31337 > /dev/null") ? "ok" : "FAIL");
