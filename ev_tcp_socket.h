@@ -3,42 +3,67 @@
  * All rights reserved.
  */
 
-#ifndef _TCP_SOCKET_H_
-#define _TCP_SOCKET_H_
+#ifndef _EV_TCP_SOCKET_H_
+#define _EV_TCP_SOCKET_H_
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <glib.h>
 #include <ev.h>
 
-#define TCP_SOCKET_WARNING 0 /* just a warning, tell the user */
-#define TCP_SOCKET_ERROR   1 /* an error, the operation cannot complete */
-#define TCP_SOCKET_FATAL   2 /* an error, the operation must be aborted */
-typedef void (*tcp_socket_error_cb) (int severity, char *message);
+#define EV_TCP_WARNING 0 /* just a warning, tell the user */
+#define EV_TCP_ERROR   1 /* an error, the operation cannot complete */
+#define EV_TCP_FATAL   2 /* an error, the operation must be aborted */
+typedef void (*ev_tcp_error_cb) (int severity, char *message);
 
-typedef void (*tcp_socket_read_cb)(tcp_socket*, char *buffer, size_t length);
+typedef struct ev_tcp_server ev_tcp_server;
+typedef struct ev_tcp_client ev_tcp_client;
 
-typedef struct tcp_socket {
-  int fd;
-  int buf_size;
-  tcp_socket_error_cb error_cb;
-  struct sockaddr_in sockaddr;
+/* Callbacks */
+typedef void (*ev_tcp_server_accept_cb) (ev_tcp_server *, ev_tcp_client *);
+
+#define EV_TCP_COMMON           \
+  int fd;                       \
+  struct sockaddr_in sockaddr;  \
+  int buf_size;                 \
+  ev_tcp_error_cb error_cb;  
+
+struct ev_tcp_server {
+  EV_TCP_COMMON
+  GQueue *children;
   
-  /* private */
-  tcp_socket_read_cb read_cb;
-  ev_io *watcher;
+  ev_tcp_socket_accept_cb accept_cb;
+  ev_io *accept_watcher;
+  struct ev_loop *loop;
+  
   char *write_buffer;
   size_t write_buffer_length;
-} tcp_socket;
+};
 
-tcp_socket* tcp_socket_new(tcp_socket_error_cb error_cb);
-void tcp_socket_free(tcp_socket *socket);
-void tcp_socket_close(tcp_socket *socket);
-char* tcp_socket_address(tcp_socket *socket);
-void tcp_socket_listen(tcp_socket *socket, char *address, int port, int backlog, connect_cb);
-size_t tcp_socket_write(tcp_socket *, char *data, size_t length);
+ev_tcp_server* ev_tcp_server_new(ev_tcp_error_cb error_cb);
+void ev_tcp_server_free(ev_tcp_server *socket);
+void ev_tcp_server_close(ev_tcp_server *socket);
+//char* ev_tcp_server_address(ev_tcp_server *socket);
+void ev_tcp_server_listen( ev_tcp_server *socket
+                         , char *address
+                         , int port
+                         , int backlog
+                         , ev_tcp_socket_accept_cb
+                         );
 
-// client side socket - not implemented
-// void tcp_socket_connect(tcp_socket *, char *address, int port);
 
-#endif _TCP_SOCKET_H_
+typedef void (*ev_tcp_client_read_cb)(ev_tcp_client*, char *buffer, size_t length);
+struct ev_tcp_client {
+  EV_TCP_COMMON
+  
+  ev_tcp_server *parent;
+  
+  ev_tcp_client_read_cb read_cb;
+  ev_io *read_watcher;
+  ev_io *write_watcher;
+}
+void ev_tcp_client_free(ev_tcp_client *client);
+size_t ev_tcp_client_write(ev_tcp_client *, char *data, size_t length);
+
+
+#endif _EV_TCP_SOCKET_H_

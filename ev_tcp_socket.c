@@ -1,88 +1,184 @@
-#include "tcp_socket.h"
+#include "ev_tcp_socket.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+#include <netdb.h>
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
 #include <assert.h>
 
-/* private functions */
-tcp_socket* tcp_socket_accept(tcp_socket *socket);
-
-tcp_socket* tcp_socket_new(tcp_socket_error_cb error_cb)
+int misc_lookup_host(char *address, struct in_addr *addr)
 {
-  tcp_socket *s = g_new0(tcp_socket, 1);
-  
-  s->fd = socket(PF_INET, SOCK_STREAM, 0);
-  s->error_cb = error_cb;
-  fcntl(s->fd, F_SETFL, O_NONBLOCK);
-  // set SO_REUSEADDR?
-  return s;
+  struct hostent *host;
+  host = gethostbyname(address);
+  if (host && host->h_addr_list[0]) {
+    memmove(addr, host->h_addr_list[0], sizeof(struct in_addr));
+    return 0;
+  }
+  return -1;
 }
 
-void tcp_socket_free(tcp_socket *socket)
+ev_tcp_client* ev_tcp_client_new(ev_tcp_server *parent)
 {
-  tcp_socket_close(socket);
-  free(socket);
-}
-
-void tcp_socket_close(tcp_socket *socket)
-{
-  close(socket->fd);
-}
-
-char* tcp_socket_address(tcp_socket *socket)
-{
-  unsigned int addrlen;
-  
-  getpeername(socket->fd, (struct sockaddr*)&(socket->sockaddr), &addrlen);
-  return inet_ntoa(socket->sockaddr.sin_addr);
-}
-
-void tcp_socket_listen (tcp_socket *socket, char *address, int port, int backlog)
-{
-  const int buf_size = 4096;
-  
-  socket->sockaddr.sin_family = AF_INET;
-  socket->sockaddr.sin_port = htons(port);
-  inet_aton(address, &(socket->sockaddr.sin_addr));
-  
-  setsockopt(socket->fd, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(int));
-  
-  bind(socket->fd, (struct sockaddr*)&(socket->sockaddr), sizeof(socket->sockaddr));
-  listen(socket->fd, backlog);
-}
-
-tcp_socket* tcp_socket_accept(tcp_socket *socket)
-{
-  tcp_socket *client_socket = g_new0(tcp_socket, 1);
   socklen_t len;
+  ev_tcp_client *client;
   
-  client_socket->error_cb = socket->error_cb;
-  client_socket->fd = accept(socket->fd, (struct sockaddr*)&(client_socket->sockaddr), &len);
-  // if(client_socket->fd < 0) { error }
-  fcntl(client_socket->fd, F_SETFL, O_NONBLOCK);
+  client = g_new0(ev_tcp_client, 1);
+  client->error_cb = parent->error_cb;
+  client->parent = parent;
+  client->fd = accept(parent->fd, (struct sockaddr*)&(client->sockaddr), &len);
+  if(client->fd < 0) {
+    client->error_cb(EV_TCP_ERROR, "Could not get client socket");
+    ev_tcp_client_free(client);
+    return NULL;
+  }
   
-  return client_socket;
+  int r = fcntl(client->fd, F_SETFL, O_NONBLOCK);
+  if(r < 0) {
+    server->error_cb(EV_TCP_WARNING, "setting nonblock mode failed");
+  }
+  
+  return client;
+}
+
+void ev_tcp_client_free(ev_tcp_client *client)
+{
+  close(client->fd);
+  free(client);
+}
+
+ev_tcp_socket* ev_tcp_server_new(ev_tcp_error_cb error_cb)
+{
+  int r;
+  ev_tcp_socket *server = g_new0(ev_tcp_server, 1);
+  
+  server->fd = socket(PF_INET, SOCK_STREAM, 0);
+  server->error_cb = error_cb;
+  r = fcntl(server->fd, F_SETFL, O_NONBLOCK);
+  if(r < 0) {
+    server->error_cb(EV_TCP_WARNING, "setting nonblock mode failed");
+  }
+  // set SO_REUSEADDR?
+  
+  server->loop = ev_default_loop(0);
+  
+  return server;
+}
+
+void ev_tcp_server_free(ev_tcp_server *server)
+{
+  ev_tcp_server_close(server);
+  free(server);
+}
+
+void ev_tcp_server_close(ev_tcp_server *server)
+{
+  if(server->accept_watcher) {
+    printf("killing accept watcher\n");
+    ev_io_stop(server->loop, server->accept_watcher);
+    free(server->accept_watcher);
+    server->accept_watcher = NULL;
+  }
+  close(server->fd);
+}
+
+void ev_tcp_server_accept( struct ev_loop *loop
+                         , struct ev_io *watcher
+                         , int revents
+                         )
+{
+  ev_tcp_server *server = (ev_tcp_server*)(watcher->data);
+  ev_tcp_client *client;
+  
+  assert(server->loop == loop);
+  
+  client = ev_tcp_client_new(server);
+  //g_queue_push_head(server->children, (gpointer)client);
+  
+  if(server->accept_cb != NULL)
+    server->accept_cb(server, client);
+  
+  return;
+}
+
+void ev_tcp_server_listen ( ev_tcp_server *server
+                          , char *address
+                          , int port
+                          , int backlog
+                          , ev_tcp_server_accept_cb accept_cb
+                          )
+{
+  int r;
+  const int buf_size = 4096;
+  struct ev_io watcher;
+  
+  server->sockaddr.sin_family = AF_INET;
+  server->sockaddr.sin_port = htons(port);
+  //inet_aton(address, server->sockaddr.sin_addr);
+  misc_lookup_host(address, &(server->sockaddr.sin_addr));
+  
+  r = setsockopt(server->fd, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(int));
+  if(r < 0) {
+    server->error_cb(EV_TCP_ERROR, "setsockopt failed");
+    return;
+  }
+  
+  r = bind(server->fd, (struct sockaddr*)&(server->sockaddr), sizeof(server->sockaddr));
+  if(r < 0) {
+    server->error_cb(EV_TCP_ERROR, "bind failed");
+    close(server->fd);
+    return;
+  }
+
+  r = listen(server->fd, backlog);
+  if(r < 0) {
+    server->error_cb(EV_TCP_ERROR, "listen failed");
+    return;
+  }
+  
+  server->accept_watcher = g_new0(struct ev_io, 1);
+  server->accept_watcher->data = server;
+  server->accept_cb = accept_cb;
+  
+  ev_init (server->accept_watcher, ev_tcp_server_accept);
+  ev_io_set (server->accept_watcher, server->fd, EV_READ);
+  ev_io_start (server->loop, server->accept_watcher);
+  ev_loop (server->loop, 0);
+  return;
 }
 
 /* Unit tests */
-#include <stdio.h>
-#include <stdlib.h>
+void unit_test_error(int severity, char *message)
+{
+  printf("ERROR(%d) %s\n", severity, message);
+  if(severity == EV_TCP_FATAL) { exit(1); }
+}
+
+void unit_test_accept(ev_tcp_socket *parent, ev_tcp_socket *child)
+{
+  ev_tcp_socket_close(child);
+  ev_tcp_socket_close(parent);
+}
+
 int main(void)
 {
-  tcp_socket *socket;
+  ev_tcp_socket *socket;
   
-  socket = tcp_socket_new(0);
-  tcp_socket_free(socket);
+  socket = ev_tcp_socket_new(unit_test_error);
   
-  socket = tcp_socket_new(0);
-  tcp_socket_listen(socket, "0.0.0.0", 3001, 1024);
-  system("telnet localhost 3001");
+  if(0 == fork()) {
+    ev_tcp_socket_listen(socket, "localhost", 31337, 1024, unit_test_accept);
+    ev_tcp_socket_close(socket);
+  } else {
+    sleep(1);
+    printf("netstat: %s\n", 0 == system("netstat -an | grep LISTEN | grep 31337 > /dev/null") ? "ok" : "FAIL");
+    printf("telnet: %s\n", 0 == system("telnet 0.0.0.0 31337 | grep 'Connected to localhost.'") ? "ok" : "FAIL"); 
+  }
   
-  tcp_socket_free(socket);
-  
-  
-  printf("hello world\n");
   return 0; // success
 }
 
