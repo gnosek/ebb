@@ -1,4 +1,4 @@
-/*
+/* Evented TCP Server
  * Copyright (c) 2007 Ry Dahl <ry.d4hl@gmail.com>
  * All rights reserved.
  */
@@ -69,7 +69,7 @@ void tcp_client_on_readable( struct ev_loop *loop
   /* User needs to copy the data out of the buffer or process it before
    * leaving this function.
    */
-  client->read_cb(client, buffer, length);
+  client->read_cb(client, buffer, length, client->read_cb_data);
 }
 
 tcp_client* tcp_client_new(tcp_server *server)
@@ -167,7 +167,7 @@ void tcp_server_accept( struct ev_loop *loop
   //g_queue_push_head(server->children, (gpointer)client);
   
   if(server->accept_cb != NULL)
-    server->accept_cb(server, client);
+    server->accept_cb(server, client, server->accept_cb_data);
   
   return;
 }
@@ -177,6 +177,7 @@ void tcp_server_listen ( tcp_server *server
                           , int port
                           , int backlog
                           , tcp_server_accept_cb_t accept_cb
+                          , void *accept_cb_data
                           )
 {
   int r;
@@ -210,6 +211,7 @@ void tcp_server_listen ( tcp_server *server
   server->accept_watcher = g_new0(struct ev_io, 1);
   server->accept_watcher->data = server;
   server->accept_cb = accept_cb;
+  server->accept_cb_data = accept_cb_data;
   
   ev_init (server->accept_watcher, tcp_server_accept);
   ev_io_set (server->accept_watcher, server->fd, EV_READ);
