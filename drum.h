@@ -15,10 +15,7 @@ typedef struct drum_request drum_request;
 
 /*** Drum Server ***/
 
-typedef void (*drum_request_cb_t)( drum_server *    
-                                 , tcp_client *client
-                                 , GHashTable *env
-                                 );
+typedef void (*drum_request_cb_t)(drum_request*, void*);
 
 drum_server* drum_server_new(error_cb_t);
 void drum_server_free(drum_server*);
@@ -34,12 +31,12 @@ struct drum_server {
 
 drum_request* drum_request_new(drum_server *, tcp_client *);
 void drum_request_free(drum_request *);
-void drum_request_read_cb(tcp_client*, char *buffer, int length, void *data);
 
 struct drum_request {
   drum_server *server;
   tcp_client *client;
   http_parser *parser;
+  size_t parser_p;
   GHashTable *env;
   GString *buffer;
 };
