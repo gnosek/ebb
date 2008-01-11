@@ -1,4 +1,5 @@
 #include "tcp_server.h"
+#include "error_callback.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -6,7 +7,7 @@
 void unit_test_error(int severity, char *message)
 {
   printf("ERROR(%d) %s\n", severity, message);
-  if(severity == TCP_FATAL) { exit(1); }
+  if(severity == ERROR_CB_FATAL) { exit(1); }
 }
 
 GString *unit_test_input;

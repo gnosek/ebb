@@ -10,11 +10,7 @@
 #include <netinet/in.h>
 #include <glib.h>
 #include <ev.h>
-
-#define TCP_WARNING 0 /* just a warning, tell the user */
-#define TCP_ERROR   1 /* an error, the operation cannot complete */
-#define TCP_FATAL   2 /* an error, the operation must be aborted */
-typedef void (*tcp_error_cb) (int severity, char *message);
+#include "error_callback.h"
 
 typedef struct tcp_client tcp_client;
 typedef struct tcp_server tcp_server;
@@ -23,38 +19,35 @@ typedef struct tcp_server tcp_server;
   int fd;                       \
   struct sockaddr_in sockaddr;  \
   int buf_size;                 \
-  tcp_error_cb error_cb;
+  error_cb_t error_cb;
 
 /*** TCP Server ***/
 
-typedef void (*tcp_server_accept_cb) (tcp_server *, tcp_client *);
+typedef void (*tcp_server_accept_cb_t) (tcp_server *, tcp_client *);
 
-tcp_server* tcp_server_new(tcp_error_cb error_cb);
+tcp_server* tcp_server_new(error_cb_t);
 void tcp_server_free(tcp_server*);
 void tcp_server_close(tcp_server*);
 void tcp_server_listen( tcp_server*
                       , char *address
                       , int port
                       , int backlog
-                      , tcp_server_accept_cb
+                      , tcp_server_accept_cb_t
                       );
 
 struct tcp_server {
   TCP_COMMON
   
-  GQueue *children;
+  GQueue *children; /* TODO: implement me - fill with clients */
   
-  tcp_server_accept_cb accept_cb;
+  tcp_server_accept_cb_t accept_cb;
   ev_io *accept_watcher;
   struct ev_loop *loop;
 };
 
 /*** TCP Client ***/
 
-typedef void (*tcp_client_read_cb)( tcp_client*
-                                  , char *buffer
-                                  , int length
-                                  );
+typedef void (*tcp_client_read_cb_t)( tcp_client*, char *buffer, int length);
 
 void tcp_client_free(tcp_client*);
 void tcp_client_close(tcp_client*);
@@ -66,7 +59,7 @@ struct tcp_client {
   
   tcp_server *parent;
   
-  tcp_client_read_cb read_cb;
+  tcp_client_read_cb_t read_cb;
   ev_io *read_watcher;
 };
 
