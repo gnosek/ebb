@@ -1,5 +1,6 @@
 #include "evtcp_server.h"
-
+#include <stdio.h>
+#include <stdlib.h>
 
 /* Unit tests */
 void unit_test_error(int severity, char *message)

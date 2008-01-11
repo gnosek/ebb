@@ -14,7 +14,7 @@
 
 #include <assert.h>
 
-#include "ev_tcp_socket.h"
+#include "evtcp_server.h"
 
 #define EV_TCP_CHUNKSIZE (16*1024)
 
@@ -37,7 +37,7 @@ int ev_tcp_client_write(ev_tcp_client *client, const char *data, int length)
   if(sent < 0) {    
     client->error_cb(EV_TCP_ERROR, strerror(errno));
     ev_tcp_client_close(client);
-    return;
+    return 0;
   }
   return sent;
 }

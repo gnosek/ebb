@@ -1,15 +1,27 @@
-EV_FLAGS = -I/opt/libev-2.01/include -L/opt/libev-2.01/lib -lev
+SHELL = /bin/sh
 
-compile: test_server
+CC = gcc
+CFLAGS = `pkg-config --cflags glib-2.0` -I/opt/libev-2.01/include -L/opt/libev-2.01/lib
 
-test_server: ev_tcp_socket.c ev_tcp_socket.h
-	gcc ev_tcp_socket.c -g $(EV_FLAGS) `pkg-config --cflags --libs glib-2.0` -o $@
+ALL_CFLAGS = -g -Wall -O6 $(CFLAGS)
 
-#% : %.c
-#  $(GHC) $(HFLAGS) $< $(LIBS) -o $@
+OBJS = evtcp_server.o evtcp_server_test.o
+LIBS = -lev `pkg-config --libs glib-2.0`
+EXE = test_server
 
-test: clean test_server
-	./test_server
+# pattern rule to compile object files from C files
+# might not work with make programs other than GNU make
+%.o : %.c Makefile
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
+all: $(EXE)
+
+$(EXE): $(OBJS) Makefile
+	$(CC) $(ALL_CFLAGS) $(OBJS) -o $(EXE) $(LIBS)
+
+test: test_server test.rb
+	ruby test.rb
+
+.PHONY : clean
 clean:
-	rm -f *.o test_server
+	rm -f $(OBJS) $(EXE)
