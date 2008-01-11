@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2007 Ry Dahl <ry.d4hl@gmail.com>
+ * All rights reserved.
+ */
+
+/* TODO: add timeouts for clients */
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -14,10 +20,9 @@
 
 #include <assert.h>
 
-#include "evtcp_server.h"
+#include "tcp_server.h"
 
-#define EV_TCP_CHUNKSIZE (16*1024)
-
+#define TCP_CHUNKSIZE (16*1024)
 
 int misc_lookup_host(char *address, struct in_addr *addr)
 {
@@ -31,33 +36,33 @@ int misc_lookup_host(char *address, struct in_addr *addr)
 }
 
 /* Returns the number of bytes remaining to write */
-int ev_tcp_client_write(ev_tcp_client *client, const char *data, int length)
+int tcp_client_write(tcp_client *client, const char *data, int length)
 {
   int sent = send(client->fd, data, length, 0);
   if(sent < 0) {    
-    client->error_cb(EV_TCP_ERROR, strerror(errno));
-    ev_tcp_client_close(client);
+    client->error_cb(TCP_ERROR, strerror(errno));
+    tcp_client_close(client);
     return 0;
   }
   return sent;
 }
 
-void ev_tcp_client_on_readable( struct ev_loop *loop
+void tcp_client_on_readable( struct ev_loop *loop
                               , struct ev_io *watcher
                               , int revents
                               )
 {
-  ev_tcp_client *client = (ev_tcp_client*)(watcher->data);
-  char buffer[EV_TCP_CHUNKSIZE];
+  tcp_client *client = (tcp_client*)(watcher->data);
+  char buffer[TCP_CHUNKSIZE];
   int length;
     
   if(client->read_cb == NULL) return;
   
-  length = recv(client->fd, buffer, EV_TCP_CHUNKSIZE, 0);
+  length = recv(client->fd, buffer, TCP_CHUNKSIZE, 0);
   
   if(length < 0) {
-    client->error_cb(EV_TCP_ERROR, strerror(errno));
-    ev_tcp_client_close(client);
+    client->error_cb(TCP_ERROR, strerror(errno));
+    tcp_client_close(client);
     return;
   }
   
@@ -67,42 +72,42 @@ void ev_tcp_client_on_readable( struct ev_loop *loop
   client->read_cb(client, buffer, length);
 }
 
-ev_tcp_client* ev_tcp_client_new(ev_tcp_server *server)
+tcp_client* tcp_client_new(tcp_server *server)
 {
   socklen_t len;
-  ev_tcp_client *client;
+  tcp_client *client;
   
-  client = g_new0(ev_tcp_client, 1);
+  client = g_new0(tcp_client, 1);
   client->error_cb = server->error_cb;
   client->parent = server;
   client->fd = accept(server->fd, (struct sockaddr*)&(client->sockaddr), &len);
   if(client->fd < 0) {
-    client->error_cb(EV_TCP_ERROR, "Could not get client socket");
-    ev_tcp_client_free(client);
+    client->error_cb(TCP_ERROR, "Could not get client socket");
+    tcp_client_free(client);
     return NULL;
   }
   
   int r = fcntl(client->fd, F_SETFL, O_NONBLOCK);
   if(r < 0) {
-    server->error_cb(EV_TCP_WARNING, "setting nonblock mode failed");
+    server->error_cb(TCP_WARNING, "setting nonblock mode failed");
   }
   
   client->read_watcher = g_new0(struct ev_io, 1);
   client->read_watcher->data = client;
-  ev_init (client->read_watcher, ev_tcp_client_on_readable);
+  ev_init (client->read_watcher, tcp_client_on_readable);
   ev_io_set (client->read_watcher, client->fd, EV_READ);
   ev_io_start (server->loop, client->read_watcher);
   
   return client;
 }
 
-void ev_tcp_client_free(ev_tcp_client *client)
+void tcp_client_free(tcp_client *client)
 {
-  ev_tcp_client_close(client);  
+  tcp_client_close(client);  
   free(client);
 }
 
-void ev_tcp_client_close(ev_tcp_client *client)
+void tcp_client_close(tcp_client *client)
 {
   if(client->read_watcher) {
     printf("killing read watcher\n");
@@ -113,16 +118,16 @@ void ev_tcp_client_close(ev_tcp_client *client)
   close(client->fd);
 }
 
-ev_tcp_server* ev_tcp_server_new(ev_tcp_error_cb error_cb)
+tcp_server* tcp_server_new(tcp_error_cb error_cb)
 {
   int r;
-  ev_tcp_server *server = g_new0(ev_tcp_server, 1);
+  tcp_server *server = g_new0(tcp_server, 1);
   
   server->fd = socket(PF_INET, SOCK_STREAM, 0);
   server->error_cb = error_cb;
   r = fcntl(server->fd, F_SETFL, O_NONBLOCK);
   if(r < 0) {
-    server->error_cb(EV_TCP_WARNING, "setting nonblock mode failed");
+    server->error_cb(TCP_WARNING, "setting nonblock mode failed");
   }
   // set SO_REUSEADDR?
   
@@ -131,13 +136,13 @@ ev_tcp_server* ev_tcp_server_new(ev_tcp_error_cb error_cb)
   return server;
 }
 
-void ev_tcp_server_free(ev_tcp_server *server)
+void tcp_server_free(tcp_server *server)
 {
-  ev_tcp_server_close(server);
+  tcp_server_close(server);
   free(server);
 }
 
-void ev_tcp_server_close(ev_tcp_server *server)
+void tcp_server_close(tcp_server *server)
 {
   if(server->accept_watcher) {
     printf("killing accept watcher\n");
@@ -148,17 +153,17 @@ void ev_tcp_server_close(ev_tcp_server *server)
   close(server->fd);
 }
 
-void ev_tcp_server_accept( struct ev_loop *loop
+void tcp_server_accept( struct ev_loop *loop
                          , struct ev_io *watcher
                          , int revents
                          )
 {
-  ev_tcp_server *server = (ev_tcp_server*)(watcher->data);
-  ev_tcp_client *client;
+  tcp_server *server = (tcp_server*)(watcher->data);
+  tcp_client *client;
   
   assert(server->loop == loop);
   
-  client = ev_tcp_client_new(server);
+  client = tcp_client_new(server);
   //g_queue_push_head(server->children, (gpointer)client);
   
   if(server->accept_cb != NULL)
@@ -167,11 +172,11 @@ void ev_tcp_server_accept( struct ev_loop *loop
   return;
 }
 
-void ev_tcp_server_listen ( ev_tcp_server *server
+void tcp_server_listen ( tcp_server *server
                           , char *address
                           , int port
                           , int backlog
-                          , ev_tcp_server_accept_cb accept_cb
+                          , tcp_server_accept_cb accept_cb
                           )
 {
   int r;
@@ -191,14 +196,14 @@ void ev_tcp_server_listen ( ev_tcp_server *server
    */
   r = bind(server->fd, (struct sockaddr*)&(server->sockaddr), sizeof(server->sockaddr));
   if(r < 0) {
-    server->error_cb(EV_TCP_ERROR, "bind failed");
+    server->error_cb(TCP_ERROR, "bind failed");
     close(server->fd);
     return;
   }
 
   r = listen(server->fd, backlog);
   if(r < 0) {
-    server->error_cb(EV_TCP_ERROR, "listen failed");
+    server->error_cb(TCP_ERROR, "listen failed");
     return;
   }
   
@@ -206,7 +211,7 @@ void ev_tcp_server_listen ( ev_tcp_server *server
   server->accept_watcher->data = server;
   server->accept_cb = accept_cb;
   
-  ev_init (server->accept_watcher, ev_tcp_server_accept);
+  ev_init (server->accept_watcher, tcp_server_accept);
   ev_io_set (server->accept_watcher, server->fd, EV_READ);
   ev_io_start (server->loop, server->accept_watcher);
   ev_loop (server->loop, 0);
