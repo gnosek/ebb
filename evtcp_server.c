@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #include <ev.h>
 #include <glib.h>
@@ -14,6 +15,9 @@
 #include <assert.h>
 
 #include "ev_tcp_socket.h"
+
+#define EV_TCP_CHUNKSIZE (16*1024)
+
 
 int misc_lookup_host(char *address, struct in_addr *addr)
 {
@@ -24,6 +28,43 @@ int misc_lookup_host(char *address, struct in_addr *addr)
     return 0;
   }
   return -1;
+}
+
+/* Returns the number of bytes remaining to write */
+int ev_tcp_client_write(ev_tcp_client *client, const char *data, int length)
+{
+  int sent = send(client->fd, data, length, 0);
+  if(sent < 0) {    
+    client->error_cb(EV_TCP_ERROR, strerror(errno));
+    ev_tcp_client_close(client);
+    return;
+  }
+  return sent;
+}
+
+void ev_tcp_client_on_readable( struct ev_loop *loop
+                              , struct ev_io *watcher
+                              , int revents
+                              )
+{
+  ev_tcp_client *client = (ev_tcp_client*)(watcher->data);
+  char buffer[EV_TCP_CHUNKSIZE];
+  int length;
+    
+  if(client->read_cb == NULL) return;
+  
+  length = recv(client->fd, buffer, EV_TCP_CHUNKSIZE, 0);
+  
+  if(length < 0) {
+    client->error_cb(EV_TCP_ERROR, strerror(errno));
+    ev_tcp_client_close(client);
+    return;
+  }
+  
+  /* User needs to copy the data out of the buffer or process it before
+   * leaving this function.
+   */
+  client->read_cb(client, buffer, length);
 }
 
 ev_tcp_client* ev_tcp_client_new(ev_tcp_server *server)
@@ -46,17 +87,29 @@ ev_tcp_client* ev_tcp_client_new(ev_tcp_server *server)
     server->error_cb(EV_TCP_WARNING, "setting nonblock mode failed");
   }
   
+  client->read_watcher = g_new0(struct ev_io, 1);
+  client->read_watcher->data = client;
+  ev_init (client->read_watcher, ev_tcp_client_on_readable);
+  ev_io_set (client->read_watcher, client->fd, EV_READ);
+  ev_io_start (server->loop, client->read_watcher);
+  
   return client;
 }
 
 void ev_tcp_client_free(ev_tcp_client *client)
 {
-  ev_tcp_client_close(client);
+  ev_tcp_client_close(client);  
   free(client);
 }
 
 void ev_tcp_client_close(ev_tcp_client *client)
 {
+  if(client->read_watcher) {
+    printf("killing read watcher\n");
+    ev_io_stop(client->parent->loop, client->read_watcher);
+    free(client->read_watcher);
+    client->read_watcher = NULL;
+  }
   close(client->fd);
 }
 
@@ -122,20 +175,20 @@ void ev_tcp_server_listen ( ev_tcp_server *server
                           )
 {
   int r;
-  const int buf_size = 4096;
-  struct ev_io watcher;
   
   server->sockaddr.sin_family = AF_INET;
   server->sockaddr.sin_port = htons(port);
   //inet_aton(address, server->sockaddr.sin_addr);
   misc_lookup_host(address, &(server->sockaddr.sin_addr));
   
-  r = setsockopt(server->fd, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(int));
-  if(r < 0) {
-    server->error_cb(EV_TCP_ERROR, "setsockopt failed");
-    return;
-  }
-  
+  /* Other socket options. This could probably be fine tuned.
+   * SO_SNDBUF       set buffer size for output
+   * SO_RCVBUF       set buffer size for input
+   * SO_SNDLOWAT     set minimum count for output
+   * SO_RCVLOWAT     set minimum count for input
+   * SO_SNDTIMEO     set timeout value for output
+   * SO_RCVTIMEO     set timeout value for input
+   */
   r = bind(server->fd, (struct sockaddr*)&(server->sockaddr), sizeof(server->sockaddr));
   if(r < 0) {
     server->error_cb(EV_TCP_ERROR, "bind failed");
@@ -159,35 +212,3 @@ void ev_tcp_server_listen ( ev_tcp_server *server
   ev_loop (server->loop, 0);
   return;
 }
-
-/* Unit tests */
-void unit_test_error(int severity, char *message)
-{
-  printf("ERROR(%d) %s\n", severity, message);
-  if(severity == EV_TCP_FATAL) { exit(1); }
-}
-
-void unit_test_accept(ev_tcp_server *server, ev_tcp_client *client)
-{
-  ev_tcp_client_close(client);
-  ev_tcp_server_close(server);
-}
-
-int main(void)
-{
-  ev_tcp_server *server;
-  
-  server = ev_tcp_server_new(unit_test_error);
-  
-  if(0 == fork()) {
-    ev_tcp_server_listen(server, "localhost", 31337, 1024, unit_test_accept);
-    ev_tcp_server_close(server);
-  } else {
-    sleep(1);
-    printf("netstat: %s\n", 0 == system("netstat -an | grep LISTEN | grep 31337 > /dev/null") ? "ok" : "FAIL");
-    printf("telnet: %s\n", 0 == system("telnet 0.0.0.0 31337 | grep 'Connected to localhost.'") ? "ok" : "FAIL"); 
-  }
-  
-  return 0; // success
-}
-
