@@ -20,10 +20,11 @@ typedef void (*drum_request_cb_t)(drum_request*, void*);
 drum_server* drum_server_new(error_cb_t);
 void drum_server_free(drum_server*);
 void drum_server_stop(drum_server*);
-void drum_server_start(drum_server*, char *host, int port, drum_request_cb_t);
+void drum_server_start(drum_server*, char *host, int port, drum_request_cb_t, void *request_cb_data);
 
 struct drum_server {
   tcp_server *tcp_server;
+  void *request_cb_data;
   drum_request_cb_t request_cb;
 };
 

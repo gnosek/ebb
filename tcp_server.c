@@ -69,7 +69,7 @@ void tcp_client_on_readable( struct ev_loop *loop
   /* User needs to copy the data out of the buffer or process it before
    * leaving this function.
    */
-  client->read_cb(client, buffer, length, client->read_cb_data);
+  client->read_cb(buffer, length, client->read_cb_data);
 }
 
 tcp_client* tcp_client_new(tcp_server *server)

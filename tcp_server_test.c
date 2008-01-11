@@ -12,8 +12,9 @@ void unit_test_error(int severity, char *message)
 
 GString *unit_test_input;
 
-void unit_test_read_cb(tcp_client *client, char *buffer, int length, void *data)
+void unit_test_read_cb(char *buffer, int length, void *data)
 {
+  tcp_client *client = (tcp_client*)(data);
   GString *reversed = g_string_new(g_utf8_strreverse(buffer, length));
   
   //g_string_append_c(reversed, '\n');
@@ -26,7 +27,8 @@ void unit_test_read_cb(tcp_client *client, char *buffer, int length, void *data)
 void unit_test_accept(tcp_server *server, tcp_client *client, void *data)
 {
   fprintf(stdout, "Connection!\n");
-  tcp_client_set_read_cb(client, unit_test_read_cb);
+  client->read_cb = unit_test_read_cb;
+  client->read_cb_data = client;
   
   //tcp_client_close(client);
   //tcp_server_close(server);

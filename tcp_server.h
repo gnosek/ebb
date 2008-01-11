@@ -50,13 +50,11 @@ struct tcp_server {
 
 /*** TCP Client ***/
 
-typedef void (*tcp_client_read_cb_t)(tcp_client*, char *buffer, int length, void *data);
+typedef void (*tcp_client_read_cb_t)(char *buffer, int length, void *data);
 
 void tcp_client_free(tcp_client*);
 void tcp_client_close(tcp_client*);
 int tcp_client_write(tcp_client *, const char *data, int length);
-#define tcp_client_set_read_cb(client, _read_cb) client->read_cb=_read_cb;
-#define tcp_client_set_read_cb_data(client, data) client->read_cb_data=data;
 
 struct tcp_client {
   TCP_COMMON

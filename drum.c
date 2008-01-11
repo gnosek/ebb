@@ -34,7 +34,7 @@ void drum_server_on_read(tcp_client *client, char *buffer, int length, void *dat
   http_parser_execute(parser, buffer, length, 0);
 }
 
-void drum_on_read(tcp_client *client, char *buffer, int length, void *data)
+void drum_on_read(char *buffer, int length, void *data)
 {
   drum_request *request = (drum_request*)(data);
 
@@ -52,7 +52,7 @@ void drum_on_read(tcp_client *client, char *buffer, int length, void *data)
   if(http_parser_is_finished(request->parser)) {
     g_hash_table_insert(request->env, g_string_new("drum.input"), request->buffer);
     
-    request->server->request_cb(request, NULL); 
+    request->server->request_cb(request, request->server->request_cb_data); 
   }
 }
 
@@ -61,13 +61,19 @@ void drum_on_request(tcp_server *server, tcp_client *client, void *data)
   drum_server *h = (drum_server*)(data);
   drum_request *request = drum_request_new(h, client);
   
-  tcp_client_set_read_cb(client, drum_on_read);
-  tcp_client_set_read_cb_data(client, request);
+  client->read_cb = drum_on_read;
+  client->read_cb_data = request;
 }
 
-void drum_server_start(drum_server *h, char *host, int port, drum_request_cb_t request_cb)
+void drum_server_start(drum_server *h
+                      , char *host
+                      , int port
+                      , drum_request_cb_t request_cb
+                      , void *request_cb_data
+                      )
 {
   h->request_cb = request_cb;
+  h->request_cb_data = request_cb_data;
   tcp_server_listen(h->tcp_server, host, port, 950, drum_on_request, h);
 }
 
@@ -79,6 +85,14 @@ void drum_http_field(void *data, const char *field, size_t flen, const char *val
   field_string = g_string_new_len(field, flen);
   value_string = g_string_new_len(value, vlen);
   g_hash_table_insert(request->env, field_string, value_string);
+}
+
+/* stupid that i have to do things like this.
+ * i wish c would die. (i guess i'm not helping that.)
+ */
+void g_string_free_but_keep_buffer(gpointer data)
+{
+  g_string_free(data, FALSE);
 }
 
 drum_request* drum_request_new(drum_server *server, tcp_client *client)
@@ -98,8 +112,11 @@ drum_request* drum_request_new(drum_server *server, tcp_client *client)
   request->buffer = g_string_new("");
   
   /* env */
-  request->env = g_hash_table_new_full(NULL, NULL, g_string_free, g_string_free);
-  
+  request->env = g_hash_table_new_full( NULL
+                                      , NULL
+                                      , g_string_free_but_keep_buffer
+                                      , g_string_free_but_keep_buffer
+                                      );
   return request;
 }
 
