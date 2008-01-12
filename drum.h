@@ -13,11 +13,13 @@
 typedef struct drum_server drum_server;
 typedef struct drum_request drum_request;
 
+#define DRUM_LOG_DOMAIN "Drum"
+
 /*** Drum Server ***/
 
 typedef void (*drum_request_cb_t)(drum_request*, void*);
 
-drum_server* drum_server_new(error_cb_t);
+drum_server* drum_server_new();
 void drum_server_free(drum_server*);
 void drum_server_stop(drum_server*);
 void drum_server_start(drum_server*, char *host, int port, drum_request_cb_t, void *request_cb_data);
@@ -37,7 +39,6 @@ struct drum_request {
   drum_server *server;
   tcp_client *client;
   http_parser *parser;
-  size_t parser_p;
   GHashTable *env;
   GString *buffer;
 };

@@ -5,15 +5,16 @@
 
 #include <glib.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <assert.h>
 #include "drum.h"
 #include "tcp_server.h"
 #include "mongrel/parser.h"
-#include "error_callback.h"
 
-drum_server* drum_server_new(error_cb_t error_cb)
+drum_server* drum_server_new()
 {
   drum_server *h = g_new0(drum_server, 1);
-  h->tcp_server = tcp_server_new(error_cb);
+  h->tcp_server = tcp_server_new();
   return h;
 }
 
@@ -37,9 +38,11 @@ void drum_server_on_read(tcp_client *client, char *buffer, int length, void *dat
 void drum_on_read(char *buffer, int length, void *data)
 {
   drum_request *request = (drum_request*)(data);
-
+  
   // remove the read callback? so this isn't called again?  
   //if(http_parser_is_finished(request->parser)) return;
+  
+  assert(request);
   
   g_string_append_len(request->buffer, buffer, length);
   
@@ -80,11 +83,22 @@ void drum_server_start(drum_server *h
 void drum_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {
   drum_request *request = (drum_request*)(data);
-  GString *field_string, *value_string; 
+
+  GString *field_string = g_string_new_len(field, flen);
+  GString *value_string = g_string_new_len(value, vlen);
+  printf("field: %s, value: %s\n", field_string->str, value_string->str);
+  // GString *field_string, *value_string; 
+  // 
+  // 
+  // 
+  // g_hash_table_insert(request->env, field_string, value_string);
+}
+
+void drum_element_cb(void *data, const char *at, size_t length)
+{
+  drum_request *request = (drum_request*)(data);
   
-  field_string = g_string_new_len(field, flen);
-  value_string = g_string_new_len(value, vlen);
-  g_hash_table_insert(request->env, field_string, value_string);
+  printf("element callback called.\n");
 }
 
 /* stupid that i have to do things like this.
@@ -107,6 +121,13 @@ drum_request* drum_request_new(drum_server *server, tcp_client *client)
   http_parser_init(request->parser);
   request->parser->data = request;
   request->parser->http_field = drum_http_field;
+  request->parser->request_method = drum_element_cb;
+  request->parser->request_uri = drum_element_cb;
+  request->parser->fragment = drum_element_cb;
+  request->parser->request_path = drum_element_cb;
+  request->parser->query_string = drum_element_cb;
+  request->parser->http_version = drum_element_cb;
+  request->parser->header_done = drum_element_cb;
   
   /* buffer */
   request->buffer = g_string_new("");

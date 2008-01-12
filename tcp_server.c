@@ -40,7 +40,7 @@ int tcp_client_write(tcp_client *client, const char *data, int length)
 {
   int sent = send(client->fd, data, length, 0);
   if(sent < 0) {    
-    client->error_cb(ERROR_CB_ERROR, strerror(errno));
+    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, strerror(errno));
     tcp_client_close(client);
     return 0;
   }
@@ -61,7 +61,7 @@ void tcp_client_on_readable( struct ev_loop *loop
   length = recv(client->fd, buffer, TCP_CHUNKSIZE, 0);
   
   if(length < 0) {
-    client->error_cb(ERROR_CB_ERROR, strerror(errno));
+    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, "Error recving data: %s", strerror(errno));
     tcp_client_close(client);
     return;
   }
@@ -78,18 +78,19 @@ tcp_client* tcp_client_new(tcp_server *server)
   tcp_client *client;
   
   client = g_new0(tcp_client, 1);
-  client->error_cb = server->error_cb;
   client->parent = server;
   client->fd = accept(server->fd, (struct sockaddr*)&(client->sockaddr), &len);
   if(client->fd < 0) {
-    client->error_cb(ERROR_CB_ERROR, "Could not get client socket");
+    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, "Could not get client socket");
     tcp_client_free(client);
     return NULL;
   }
   
   int r = fcntl(client->fd, F_SETFL, O_NONBLOCK);
   if(r < 0) {
-    server->error_cb(ERROR_CB_WARNING, "setting nonblock mode failed");
+    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, "Setting nonblock mode on socket failed");
+    tcp_client_free(client);
+    return NULL;
   }
   
   client->read_watcher = g_new0(struct ev_io, 1);
@@ -118,16 +119,17 @@ void tcp_client_close(tcp_client *client)
   close(client->fd);
 }
 
-tcp_server* tcp_server_new(error_cb_t error_cb)
+tcp_server* tcp_server_new()
 {
   int r;
   tcp_server *server = g_new0(tcp_server, 1);
   
   server->fd = socket(PF_INET, SOCK_STREAM, 0);
-  server->error_cb = error_cb;
   r = fcntl(server->fd, F_SETFL, O_NONBLOCK);
   if(r < 0) {
-    server->error_cb(ERROR_CB_WARNING, "setting nonblock mode failed");
+    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, "Setting nonblock mode on socket failed");
+    tcp_server_free(server);
+    return NULL;
   }
   // set SO_REUSEADDR?
   
@@ -197,14 +199,14 @@ void tcp_server_listen ( tcp_server *server
    */
   r = bind(server->fd, (struct sockaddr*)&(server->sockaddr), sizeof(server->sockaddr));
   if(r < 0) {
-    server->error_cb(ERROR_CB_ERROR, "bind failed");
+    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, "Failed to bind to %s port %d", address, port);
     close(server->fd);
     return;
   }
 
   r = listen(server->fd, backlog);
   if(r < 0) {
-    server->error_cb(ERROR_CB_ERROR, "listen failed");
+    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, "listen failed");
     return;
   }
   

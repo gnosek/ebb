@@ -10,22 +10,22 @@
 #include <netinet/in.h>
 #include <glib.h>
 #include <ev.h>
-#include "error_callback.h"
 
 typedef struct tcp_client tcp_client;
 typedef struct tcp_server tcp_server;
 
+
+#define TCP_SERVER_LOG_DOMAIN "TCP Server"
 #define TCP_COMMON              \
   int fd;                       \
   struct sockaddr_in sockaddr;  \
-  int buf_size;                 \
-  error_cb_t error_cb;
+  int buf_size;
 
 /*** TCP Server ***/
 
 typedef void (*tcp_server_accept_cb_t) (tcp_server *, tcp_client *, void *callback_data);
 
-tcp_server* tcp_server_new(error_cb_t);
+tcp_server* tcp_server_new();
 void tcp_server_free(tcp_server*);
 void tcp_server_close(tcp_server*);
 void tcp_server_listen( tcp_server*
