@@ -14,6 +14,9 @@ typedef struct drum_server drum_server;
 typedef struct drum_request drum_request;
 
 #define DRUM_LOG_DOMAIN "Drum"
+#define drum_error(str, ...)  \
+  g_log(DRUM_LOG_DOMAIN, G_LOG_LEVEL_ERROR, str, ## __VA_ARGS__);
+
 
 /*** Drum Server ***/
 
@@ -39,9 +42,19 @@ struct drum_request {
   drum_server *server;
   tcp_client *client;
   http_parser *parser;
-  GHashTable *env;
+  GQueue *env; /* queue of drum_env_pairs */
   GString *buffer;
 };
 
+typedef struct drum_env_pair {
+  char *field;
+  size_t flen;
+  
+  char *value;
+  size_t vlen;
+} drum_env_pair;
+
+drum_env_pair* drum_env_pair_new(const char *field, size_t flen, const char *value, size_t vlen);
+#define drum_env_pair_free(pair) free(pair)
 
 #endif drum_h

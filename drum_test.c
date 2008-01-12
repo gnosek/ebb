@@ -14,7 +14,26 @@ void unit_test_error( const gchar *log_domain
 
 void request_cb(drum_request *request, void  *data)
 {
-  fprintf(stdout, "hello world :P\n");
+  drum_env_pair *pair;
+  
+  g_message("Request");
+  
+  while(pair = g_queue_pop_head(request->env)) {
+    GString *out = g_string_new("");
+    
+    g_string_append_len(out, pair->field, pair->flen);
+    g_string_append(out, "\r\n");
+    g_string_append_len(out, pair->value, pair->vlen);
+    g_string_append(out, "\r\n\r\n");
+    
+    tcp_client_write(request->client, out->str, out->len);
+    
+    g_string_free(out, TRUE);
+    drum_env_pair_free(pair);
+  }
+  
+  tcp_client_write(request->client, "Hello.\r\n\r\n", 6);
+  tcp_client_close(request->client);
 }
 
 int main(void)
@@ -22,7 +41,7 @@ int main(void)
   drum_server *server;
   server = drum_server_new();
   
-  g_log_set_handler( TCP_SERVER_LOG_DOMAIN
+  g_log_set_handler( TCP_LOG_DOMAIN
                    , G_LOG_LEVEL_MASK | G_LOG_FLAG_FATAL| G_LOG_FLAG_RECURSION
                    , unit_test_error
                    , NULL);

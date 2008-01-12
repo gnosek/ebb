@@ -39,8 +39,8 @@ int misc_lookup_host(char *address, struct in_addr *addr)
 int tcp_client_write(tcp_client *client, const char *data, int length)
 {
   int sent = send(client->fd, data, length, 0);
-  if(sent < 0) {    
-    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, strerror(errno));
+  if(sent < 0) {
+    tcp_error(strerror(errno));
     tcp_client_close(client);
     return 0;
   }
@@ -53,7 +53,7 @@ void tcp_client_on_readable( struct ev_loop *loop
                               )
 {
   tcp_client *client = (tcp_client*)(watcher->data);
-  char buffer[TCP_CHUNKSIZE];
+  char buffer[TCP_CHUNKSIZE]; // XXX this is allocated on the stack? is this efficent?
   int length;
     
   if(client->read_cb == NULL) return;
@@ -61,7 +61,7 @@ void tcp_client_on_readable( struct ev_loop *loop
   length = recv(client->fd, buffer, TCP_CHUNKSIZE, 0);
   
   if(length < 0) {
-    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, "Error recving data: %s", strerror(errno));
+    tcp_error("Error recving data: %s", strerror(errno));
     tcp_client_close(client);
     return;
   }
@@ -81,14 +81,14 @@ tcp_client* tcp_client_new(tcp_server *server)
   client->parent = server;
   client->fd = accept(server->fd, (struct sockaddr*)&(client->sockaddr), &len);
   if(client->fd < 0) {
-    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, "Could not get client socket");
+    tcp_error("Could not get client socket");
     tcp_client_free(client);
     return NULL;
   }
   
   int r = fcntl(client->fd, F_SETFL, O_NONBLOCK);
   if(r < 0) {
-    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, "Setting nonblock mode on socket failed");
+    tcp_error("Setting nonblock mode on socket failed");
     tcp_client_free(client);
     return NULL;
   }
@@ -127,7 +127,7 @@ tcp_server* tcp_server_new()
   server->fd = socket(PF_INET, SOCK_STREAM, 0);
   r = fcntl(server->fd, F_SETFL, O_NONBLOCK);
   if(r < 0) {
-    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, "Setting nonblock mode on socket failed");
+    tcp_error("Setting nonblock mode on socket failed");
     tcp_server_free(server);
     return NULL;
   }
@@ -199,14 +199,14 @@ void tcp_server_listen ( tcp_server *server
    */
   r = bind(server->fd, (struct sockaddr*)&(server->sockaddr), sizeof(server->sockaddr));
   if(r < 0) {
-    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, "Failed to bind to %s port %d", address, port);
+    tcp_error("Failed to bind to %s %d", address, port);
     close(server->fd);
     return;
   }
 
   r = listen(server->fd, backlog);
   if(r < 0) {
-    g_log(TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_ERROR, "listen failed");
+    tcp_error("listen() failed");
     return;
   }
   

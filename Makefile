@@ -6,7 +6,7 @@ CFLAGS = `pkg-config --cflags glib-2.0` -I/opt/libev-2.01/include -L/opt/libev-2
 ALL_CFLAGS = -g -Wall -O6 $(CFLAGS)
 
 OBJS = tcp_server.o drum.o
-LIBS = -lev `pkg-config --libs glib-2.0`
+LIBS = -lev `pkg-config --libs glib-2.0` -lpthread
 #EXE = test_server drum_test
 TESTS = tcp_server_test drum_test
 

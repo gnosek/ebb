@@ -4,12 +4,17 @@
  */
 
 #include <glib.h>
+#include <pthread.h>
+
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
-#include "drum.h"
-#include "tcp_server.h"
+#include <errno.h>
+
 #include "mongrel/parser.h"
+#include "tcp_server.h"
+#include "drum.h"
 
 drum_server* drum_server_new()
 {
@@ -35,9 +40,26 @@ void drum_server_on_read(tcp_client *client, char *buffer, int length, void *dat
   http_parser_execute(parser, buffer, length, 0);
 }
 
-void drum_on_read(char *buffer, int length, void *data)
+void* drum_handle_request(void *_request)
 {
-  drum_request *request = (drum_request*)(data);
+  const char *drum_input = "drum.input";
+  drum_request *request = (drum_request*)(_request);
+  drum_env_pair *drum_input_pair = drum_env_pair_new( drum_input
+                                                    , strlen(drum_input)
+                                                    , request->buffer->str
+                                                    , request->buffer->len
+                                                    );
+  
+  g_queue_push_head(request->env, drum_input_pair);
+  request->server->request_cb(request, request->server->request_cb_data);
+  
+  pthread_exit(NULL);
+  return NULL;
+}
+
+void drum_on_read(char *buffer, int length, void *_request)
+{
+  drum_request *request = (drum_request*)(_request);
   
   // remove the read callback? so this isn't called again?  
   //if(http_parser_is_finished(request->parser)) return;
@@ -53,9 +75,12 @@ void drum_on_read(char *buffer, int length, void *data)
                      );
   
   if(http_parser_is_finished(request->parser)) {
-    g_hash_table_insert(request->env, g_string_new("drum.input"), request->buffer);
-    
-    request->server->request_cb(request, request->server->request_cb_data); 
+    pthread_t thread;
+    int rc = pthread_create(&thread, NULL, drum_handle_request, request);
+    if(rc < 0) {
+      drum_error("Could not create thread: %s", strerror(errno));
+      return;
+    }
   }
 }
 
@@ -83,30 +108,16 @@ void drum_server_start(drum_server *h
 void drum_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {
   drum_request *request = (drum_request*)(data);
-
-  GString *field_string = g_string_new_len(field, flen);
-  GString *value_string = g_string_new_len(value, vlen);
-  printf("field: %s, value: %s\n", field_string->str, value_string->str);
-  // GString *field_string, *value_string; 
-  // 
-  // 
-  // 
-  // g_hash_table_insert(request->env, field_string, value_string);
+  drum_env_pair *pair = drum_env_pair_new(field, flen, value, vlen);
+  
+  g_queue_push_head(request->env, pair);
 }
 
 void drum_element_cb(void *data, const char *at, size_t length)
 {
-  drum_request *request = (drum_request*)(data);
+  //drum_request *request = (drum_request*)(data);
   
   printf("element callback called.\n");
-}
-
-/* stupid that i have to do things like this.
- * i wish c would die. (i guess i'm not helping that.)
- */
-void g_string_free_but_keep_buffer(gpointer data)
-{
-  g_string_free(data, FALSE);
 }
 
 drum_request* drum_request_new(drum_server *server, tcp_client *client)
@@ -133,11 +144,8 @@ drum_request* drum_request_new(drum_server *server, tcp_client *client)
   request->buffer = g_string_new("");
   
   /* env */
-  request->env = g_hash_table_new_full( NULL
-                                      , NULL
-                                      , g_string_free_but_keep_buffer
-                                      , g_string_free_but_keep_buffer
-                                      );
+  request->env = g_queue_new();
+  
   return request;
 }
 
@@ -150,8 +158,20 @@ void drum_request_free(drum_request *request)
   g_string_free(request->buffer, TRUE);
   
   /* env */
-  g_hash_table_destroy(request->env);
+  drum_env_pair *pair;
+  while(pair = g_queue_pop_head(request->env))
+    drum_env_pair_free(pair);
+  g_queue_free(request->env);
   
   free(request);
 }
 
+drum_env_pair* drum_env_pair_new(const char *field, size_t flen, const char *value, size_t vlen)
+{
+  drum_env_pair *pair = g_new(drum_env_pair, 1);
+  pair->field = field;
+  pair->flen = flen;
+  pair->value = value;
+  pair->vlen = vlen;
+  return pair;
+}

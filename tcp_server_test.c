@@ -29,7 +29,7 @@ void unit_test_read_cb(char *buffer, int length, void *data)
 
 void unit_test_accept(tcp_server *server, tcp_client *client, void *data)
 {
-  fprintf(stdout, "Connection!\n");
+  fprintf(stdout, "Connection\n");
   client->read_cb = unit_test_read_cb;
   client->read_cb_data = client;
   
@@ -43,7 +43,7 @@ int main(void)
   unit_test_input = g_string_new(NULL);
   server = tcp_server_new(unit_test_error);
   
-  g_log_set_handler (TCP_SERVER_LOG_DOMAIN, G_LOG_LEVEL_MASK | G_LOG_FLAG_FATAL
+  g_log_set_handler (TCP_LOG_DOMAIN, G_LOG_LEVEL_MASK | G_LOG_FLAG_FATAL
                       | G_LOG_FLAG_RECURSION, unit_test_error, NULL);
   
   fprintf(stdout, "Starting server at 0.0.0.0 31337\n");

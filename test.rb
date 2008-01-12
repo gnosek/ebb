@@ -5,7 +5,7 @@ Debugger.start
 
 class ServerTest < Test::Unit::TestCase
   def test_server
-    system %q{./test_server > /dev/null &}
+    system %q{./tcp_server_test > /dev/null &}
     sleep 0.5
     TCPSocket.open('localhost', 31337) do |socket|
       ["Hello", "World", "foo bar"].each do |w|
@@ -14,6 +14,6 @@ class ServerTest < Test::Unit::TestCase
       end
     end
   ensure
-    system %q{killall -9 test_server}
+    system %q{killall -9 tcp_server_test}
   end
 end

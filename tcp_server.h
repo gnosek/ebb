@@ -15,7 +15,13 @@ typedef struct tcp_client tcp_client;
 typedef struct tcp_server tcp_server;
 
 
-#define TCP_SERVER_LOG_DOMAIN "TCP Server"
+#define TCP_LOG_DOMAIN "TCP Server"
+#define tcp_error(str, ...)  \
+  g_log(TCP_LOG_DOMAIN, G_LOG_LEVEL_ERROR, str, ## __VA_ARGS__);
+
+
+
+
 #define TCP_COMMON              \
   int fd;                       \
   struct sockaddr_in sockaddr;  \
