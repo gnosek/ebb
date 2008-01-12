@@ -18,14 +18,14 @@
 
 drum_server* drum_server_new()
 {
-  drum_server *h = g_new0(drum_server, 1);
-  h->tcp_server = tcp_server_new();
-  return h;
+  drum_server *server = g_new0(drum_server, 1);
+  server->tcp_server = tcp_server_new();
+  return server;
 }
 
-void drum_server_free(drum_server *h)
+void drum_server_free(drum_server *server)
 {
-  tcp_server_free(h->tcp_server);
+  tcp_server_free(server->tcp_server);
 }
 
 void drum_server_stop(drum_server *h)
@@ -42,15 +42,17 @@ void drum_server_on_read(tcp_client *client, char *buffer, int length, void *dat
 
 void* drum_handle_request(void *_request)
 {
-  const char *drum_input = "drum.input";
   drum_request *request = (drum_request*)(_request);
-  drum_env_pair *drum_input_pair = drum_env_pair_new( drum_input
-                                                    , strlen(drum_input)
-                                                    , request->buffer->str
-                                                    , request->buffer->len
-                                                    );
   
-  g_queue_push_head(request->env, drum_input_pair);
+  g_queue_push_head(request->env, 
+    drum_env_pair_new("drum.input", strlen("drum.input"), request->buffer->str, request->buffer->len));
+  
+  g_queue_push_head(request->env, drum_env_pair_new2("SERVER_NAME", 
+    tcp_server_address(request->server->tcp_server)));
+  
+  g_queue_push_head(request->env, drum_env_pair_new2("SERVER_PORT", 
+    request->server->tcp_server->port_s));
+  
   request->server->request_cb(request, request->server->request_cb_data);
   
   pthread_exit(NULL);
@@ -62,7 +64,7 @@ void drum_on_read(char *buffer, int length, void *_request)
   drum_request *request = (drum_request*)(_request);
   
   // remove the read callback? so this isn't called again?  
-  //if(http_parser_is_finished(request->parser)) return;
+  if(http_parser_is_finished(request->parser)) return;
   
   assert(request);
   
@@ -93,32 +95,19 @@ void drum_on_request(tcp_server *server, tcp_client *client, void *data)
   client->read_cb_data = request;
 }
 
-void drum_server_start(drum_server *h
+void drum_server_start(drum_server *server
                       , char *host
                       , int port
                       , drum_request_cb_t request_cb
                       , void *request_cb_data
                       )
 {
-  h->request_cb = request_cb;
-  h->request_cb_data = request_cb_data;
-  tcp_server_listen(h->tcp_server, host, port, 950, drum_on_request, h);
+  server->request_cb = request_cb;
+  server->request_cb_data = request_cb_data;
+  tcp_server_listen(server->tcp_server, host, port, 950, drum_on_request, server);
 }
 
-void drum_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen)
-{
-  drum_request *request = (drum_request*)(data);
-  drum_env_pair *pair = drum_env_pair_new(field, flen, value, vlen);
-  
-  g_queue_push_head(request->env, pair);
-}
-
-void drum_element_cb(void *data, const char *at, size_t length)
-{
-  //drum_request *request = (drum_request*)(data);
-  
-  printf("element callback called.\n");
-}
+#include "parser_callbacks.h"
 
 drum_request* drum_request_new(drum_server *server, tcp_client *client)
 {
@@ -131,14 +120,14 @@ drum_request* drum_request_new(drum_server *server, tcp_client *client)
   request->parser = g_new0(http_parser, 1);
   http_parser_init(request->parser);
   request->parser->data = request;
-  request->parser->http_field = drum_http_field;
-  request->parser->request_method = drum_element_cb;
-  request->parser->request_uri = drum_element_cb;
-  request->parser->fragment = drum_element_cb;
-  request->parser->request_path = drum_element_cb;
-  request->parser->query_string = drum_element_cb;
-  request->parser->http_version = drum_element_cb;
-  request->parser->header_done = drum_element_cb;
+  request->parser->http_field = drum_http_field_cb;
+  request->parser->request_method = drum_request_method_cb;
+  request->parser->request_uri = drum_request_uri_cb;
+  request->parser->fragment = drum_fragment_cb;
+  request->parser->request_path = drum_request_path_cb;
+  request->parser->query_string = drum_query_string_cb;
+  request->parser->http_version = drum_http_version_cb;
+  request->parser->header_done = drum_header_done_cb;
   
   /* buffer */
   request->buffer = g_string_new("");
@@ -159,7 +148,7 @@ void drum_request_free(drum_request *request)
   
   /* env */
   drum_env_pair *pair;
-  while(pair = g_queue_pop_head(request->env))
+  while((pair = g_queue_pop_head(request->env)))
     drum_env_pair_free(pair);
   g_queue_free(request->env);
   

@@ -111,7 +111,7 @@ void tcp_client_free(tcp_client *client)
 void tcp_client_close(tcp_client *client)
 {
   if(client->read_watcher) {
-    printf("killing read watcher\n");
+    //g_logv("killing read watcher\n");
     ev_io_stop(client->parent->loop, client->read_watcher);
     free(client->read_watcher);
     client->read_watcher = NULL;
@@ -132,9 +132,7 @@ tcp_server* tcp_server_new()
     return NULL;
   }
   // set SO_REUSEADDR?
-  
   server->loop = ev_default_loop(0);
-  
   return server;
 }
 
@@ -146,6 +144,14 @@ void tcp_server_free(tcp_server *server)
 
 void tcp_server_close(tcp_server *server)
 {
+  if(server->port_s) {
+    free(server->port_s);
+    server->port_s = NULL;
+  }
+  if(server->dns_info) {
+    free(server->dns_info);
+    server->dns_info = NULL;
+  }
   if(server->accept_watcher) {
     printf("killing accept watcher\n");
     ev_io_stop(server->loop, server->accept_watcher);
@@ -156,9 +162,9 @@ void tcp_server_close(tcp_server *server)
 }
 
 void tcp_server_accept( struct ev_loop *loop
-                         , struct ev_io *watcher
-                         , int revents
-                         )
+                      , struct ev_io *watcher
+                      , int revents
+                      )
 {
   tcp_server *server = (tcp_server*)(watcher->data);
   tcp_client *client;
@@ -175,21 +181,32 @@ void tcp_server_accept( struct ev_loop *loop
 }
 
 void tcp_server_listen ( tcp_server *server
-                          , char *address
-                          , int port
-                          , int backlog
-                          , tcp_server_accept_cb_t accept_cb
-                          , void *accept_cb_data
-                          )
+                       , char *address
+                       , int port
+                       , int backlog
+                       , tcp_server_accept_cb_t accept_cb
+                       , void *accept_cb_data
+                       )
 {
   int r;
   
   server->sockaddr.sin_family = AF_INET;
   server->sockaddr.sin_port = htons(port);
-  //inet_aton(address, server->sockaddr.sin_addr);
-  misc_lookup_host(address, &(server->sockaddr.sin_addr));
   
-  /* Other socket options. This could probably be fine tuned.
+  /* for easy access to the port */
+  server->port_s = malloc(sizeof(char)*8);
+  sprintf(server->port_s, "%d", port);
+  
+  server->dns_info = gethostbyname(address);
+  if (!(server->dns_info && server->dns_info->h_addr)) {
+    tcp_error("Could not look up hostname %s", address);
+    goto error;
+  }
+  memmove(&(server->sockaddr.sin_addr), server->dns_info->h_addr, sizeof(struct in_addr));
+  
+  //misc_lookup_host(address, &(server->sockaddr.sin_addr));
+  
+  /* Other socket options. These could probably be fine tuned.
    * SO_SNDBUF       set buffer size for output
    * SO_RCVBUF       set buffer size for input
    * SO_SNDLOWAT     set minimum count for output
@@ -200,14 +217,13 @@ void tcp_server_listen ( tcp_server *server
   r = bind(server->fd, (struct sockaddr*)&(server->sockaddr), sizeof(server->sockaddr));
   if(r < 0) {
     tcp_error("Failed to bind to %s %d", address, port);
-    close(server->fd);
-    return;
+    goto error;
   }
 
   r = listen(server->fd, backlog);
   if(r < 0) {
     tcp_error("listen() failed");
-    return;
+    goto error;
   }
   
   server->accept_watcher = g_new0(struct ev_io, 1);
@@ -220,4 +236,16 @@ void tcp_server_listen ( tcp_server *server
   ev_io_start (server->loop, server->accept_watcher);
   ev_loop (server->loop, 0);
   return;
+  
+error:
+  tcp_server_close(server);
+  return;
+}
+
+char* tcp_server_address(tcp_server *server)
+{
+  if(server->dns_info)
+    return server->dns_info->h_name;
+  else
+    return NULL;
 }

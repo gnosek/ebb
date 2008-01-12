@@ -19,9 +19,6 @@ typedef struct tcp_server tcp_server;
 #define tcp_error(str, ...)  \
   g_log(TCP_LOG_DOMAIN, G_LOG_LEVEL_ERROR, str, ## __VA_ARGS__);
 
-
-
-
 #define TCP_COMMON              \
   int fd;                       \
   struct sockaddr_in sockaddr;  \
@@ -41,9 +38,12 @@ void tcp_server_listen( tcp_server*
                       , tcp_server_accept_cb_t
                       , void *accept_cb_data
                       );
+char* tcp_server_address(tcp_server*);
 
 struct tcp_server {
   TCP_COMMON
+  struct hostent *dns_info;
+  char *port_s;
   
   GQueue *children; /* TODO: implement me - fill with clients */
   

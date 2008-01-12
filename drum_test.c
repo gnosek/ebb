@@ -18,17 +18,13 @@ void request_cb(drum_request *request, void  *data)
   
   g_message("Request");
   
-  while(pair = g_queue_pop_head(request->env)) {
-    GString *out = g_string_new("");
+  while((pair = g_queue_pop_head(request->env))) {
     
-    g_string_append_len(out, pair->field, pair->flen);
-    g_string_append(out, "\r\n");
-    g_string_append_len(out, pair->value, pair->vlen);
-    g_string_append(out, "\r\n\r\n");
+    tcp_client_write(request->client, pair->field, pair->flen);
+    tcp_client_write(request->client, "\r\n", 2);
+    tcp_client_write(request->client, pair->value, pair->vlen);
+    tcp_client_write(request->client, "\r\n\r\n", 4);
     
-    tcp_client_write(request->client, out->str, out->len);
-    
-    g_string_free(out, TRUE);
     drum_env_pair_free(pair);
   }
   
