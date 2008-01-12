@@ -1,6 +1,5 @@
 /* Is there a way to get the preprocessor to do this so that this file isn't
- * so redundant?
- */
+ * so redundant? */
 
 void drum_http_field_cb(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {
@@ -57,6 +56,10 @@ void drum_http_version_cb(void *data, const char *at, size_t length)
   g_queue_push_head(request->env, pair);
 }
 
+/* TODO: this isn't handled correctly. Browser might send
+ * Expect: 100-continue
+ * Should drum handle that?
+ */
 void drum_header_done_cb(void *data, const char *at, size_t length)
 {
   const char *key = "body";

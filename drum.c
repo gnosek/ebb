@@ -40,17 +40,20 @@ void drum_server_on_read(tcp_client *client, char *buffer, int length, void *dat
   http_parser_execute(parser, buffer, length, 0);
 }
 
+const char *drum_input = "drum.input";
+const char *server_name = "SERVER_NAME";
+const char *server_port = "SERVER_PORT";
 void* drum_handle_request(void *_request)
 {
   drum_request *request = (drum_request*)(_request);
   
   g_queue_push_head(request->env, 
-    drum_env_pair_new("drum.input", strlen("drum.input"), request->buffer->str, request->buffer->len));
+    drum_env_pair_new(drum_input, strlen(drum_input), request->buffer->str, request->buffer->len));
   
-  g_queue_push_head(request->env, drum_env_pair_new2("SERVER_NAME", 
+  g_queue_push_head(request->env, drum_env_pair_new2(server_name, 
     tcp_server_address(request->server->tcp_server)));
   
-  g_queue_push_head(request->env, drum_env_pair_new2("SERVER_PORT", 
+  g_queue_push_head(request->env, drum_env_pair_new2(server_port, 
     request->server->tcp_server->port_s));
   
   request->server->request_cb(request, request->server->request_cb_data);

@@ -47,15 +47,15 @@ struct drum_request {
 };
 
 typedef struct drum_env_pair {
-  char *field;
+  const char *field;
   size_t flen;
-  
-  char *value;
+  const char *value;
   size_t vlen;
 } drum_env_pair;
 
 drum_env_pair* drum_env_pair_new(const char *field, size_t flen, const char *value, size_t vlen);
 #define drum_env_pair_new2(f,v) drum_env_pair_new(f,strlen(f),v,strlen(v))
 #define drum_env_pair_free(pair) free(pair)
+
 
 #endif drum_h

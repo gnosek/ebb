@@ -16,7 +16,7 @@ void request_cb(drum_request *request, void  *data)
 {
   drum_env_pair *pair;
   
-  g_message("Request");
+  //g_message("Request");
   
   while((pair = g_queue_pop_head(request->env))) {
     
