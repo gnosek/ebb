@@ -3,8 +3,8 @@
  * All rights reserved.
  */
 
-#ifndef tcp_server_h
-#define tcp_server_h
+#ifndef tcp_h
+#define tcp_h
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -26,7 +26,7 @@ typedef struct tcp_server tcp_server;
 
 /*** TCP Server ***/
 
-typedef void (*tcp_server_accept_cb_t) (tcp_server *, tcp_client *, void *callback_data);
+typedef void (*tcp_server_accept_cb_t) (tcp_client *, void *callback_data);
 
 tcp_server* tcp_server_new();
 void tcp_server_free(tcp_server*);
@@ -73,4 +73,4 @@ struct tcp_client {
   ev_io *read_watcher;
 };
 
-#endif tcp_server_h
+#endif tcp_h

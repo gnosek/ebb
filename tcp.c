@@ -20,7 +20,7 @@
 
 #include <assert.h>
 
-#include "tcp_server.h"
+#include "tcp.h"
 
 #define TCP_CHUNKSIZE (16*1024)
 
@@ -175,7 +175,7 @@ void tcp_server_accept( struct ev_loop *loop
   //g_queue_push_head(server->children, (gpointer)client);
   
   if(server->accept_cb != NULL)
-    server->accept_cb(server, client, server->accept_cb_data);
+    server->accept_cb(client, server->accept_cb_data);
   
   return;
 }

@@ -14,6 +14,6 @@ parser.c: parser.rl
 
 .PHONY : clean clobber
 clean:
-	rm -f $(OBJS) parser.xml
+	rm -f $(OBJS)
 clobber: clean
 	rm -f parser.c

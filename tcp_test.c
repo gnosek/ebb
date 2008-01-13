@@ -1,4 +1,4 @@
-#include "tcp_server.h"
+#include "tcp.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -27,7 +27,7 @@ void unit_test_read_cb(char *buffer, int length, void *data)
   tcp_client_write(client, reversed->str, reversed->len);
 }
 
-void unit_test_accept(tcp_server *server, tcp_client *client, void *data)
+void unit_test_accept(tcp_client *client, void *data)
 {
   fprintf(stdout, "Connection\n");
   client->read_cb = unit_test_read_cb;

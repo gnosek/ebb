@@ -13,75 +13,68 @@
 #include <errno.h>
 
 #include "mongrel/parser.h"
-#include "tcp_server.h"
+#include "tcp.h"
 #include "ebb.h"
 
 ebb_server* ebb_server_new()
 {
   ebb_server *server = g_new0(ebb_server, 1);
-  server->tcp_server = tcp_server_new();
+  server->socket = tcp_server_new();
   return server;
 }
 
 void ebb_server_free(ebb_server *server)
 {
-  tcp_server_free(server->tcp_server);
+  tcp_server_free(server->socket);
 }
 
-void ebb_server_stop(ebb_server *h)
+void ebb_server_stop(ebb_server *server)
 {
-  tcp_server_close(h->tcp_server);
-}
-
-void ebb_server_on_read(tcp_client *client, char *buffer, int length, void *data)
-{
-  http_parser *parser = (http_parser*)(data);
-  
-  http_parser_execute(parser, buffer, length, 0);
+  tcp_server_close(server->socket);
 }
 
 const char *ebb_input = "ebb.input";
 const char *server_name = "SERVER_NAME";
 const char *server_port = "SERVER_PORT";
-void* ebb_handle_request(void *_request)
+void* ebb_handle_request(void *_client)
 {
-  ebb_request *request = (ebb_request*)(_request);
+  ebb_client *client = (ebb_client*)(_client);
   
-  g_queue_push_head(request->env, 
-    ebb_env_pair_new(ebb_input, strlen(ebb_input), request->buffer->str, request->buffer->len));
+  g_queue_push_head(client->env, 
+    ebb_env_pair_new(ebb_input, strlen(ebb_input), client->buffer->str, client->buffer->len));
   
-  g_queue_push_head(request->env, ebb_env_pair_new2(server_name, 
-    tcp_server_address(request->server->tcp_server)));
+  g_queue_push_head(client->env, ebb_env_pair_new2(server_name, 
+    tcp_server_address(client->server->socket)));
   
-  g_queue_push_head(request->env, ebb_env_pair_new2(server_port, 
-    request->server->tcp_server->port_s));
+  g_queue_push_head(client->env, ebb_env_pair_new2(server_port, 
+    client->server->socket->port_s));
   
-  request->server->request_cb(request, request->server->request_cb_data);
+  client->server->request_cb(client, client->server->request_cb_data);
   
   pthread_exit(NULL);
   return NULL;
 }
 
-void ebb_on_read(char *buffer, int length, void *_request)
+void ebb_on_read(char *buffer, int length, void *_client)
 {
-  ebb_request *request = (ebb_request*)(_request);
+  ebb_client *client = (ebb_client*)(_client);
   
   // remove the read callback? so this isn't called again?  
-  if(http_parser_is_finished(request->parser)) return;
+  if(http_parser_is_finished(client->parser)) return;
   
-  assert(request);
+  assert(client);
   
-  g_string_append_len(request->buffer, buffer, length);
+  g_string_append_len(client->buffer, buffer, length);
   
-  http_parser_execute( request->parser
-                     , request->buffer->str
-                     , request->buffer->len
-                     , request->parser->nread
+  http_parser_execute( client->parser
+                     , client->buffer->str
+                     , client->buffer->len
+                     , client->parser->nread
                      );
   
-  if(http_parser_is_finished(request->parser)) {
+  if(http_parser_is_finished(client->parser)) {
     pthread_t thread;
-    int rc = pthread_create(&thread, NULL, ebb_handle_request, request);
+    int rc = pthread_create(&thread, NULL, ebb_handle_request, client);
     if(rc < 0) {
       ebb_error("Could not create thread: %s", strerror(errno));
       return;
@@ -89,13 +82,13 @@ void ebb_on_read(char *buffer, int length, void *_request)
   }
 }
 
-void ebb_on_request(tcp_server *server, tcp_client *client, void *data)
+void ebb_on_request(tcp_client *socket, void *data)
 {
-  ebb_server *h = (ebb_server*)(data);
-  ebb_request *request = ebb_request_new(h, client);
+  ebb_server *server = (ebb_server*)(data);
+  ebb_client *client = ebb_client_new(server, socket);
   
-  client->read_cb = ebb_on_read;
-  client->read_cb_data = request;
+  socket->read_cb = ebb_on_read;
+  socket->read_cb_data = client;
 }
 
 void ebb_server_start(ebb_server *server
@@ -107,55 +100,55 @@ void ebb_server_start(ebb_server *server
 {
   server->request_cb = request_cb;
   server->request_cb_data = request_cb_data;
-  tcp_server_listen(server->tcp_server, host, port, 950, ebb_on_request, server);
+  tcp_server_listen(server->socket, host, port, 950, ebb_on_request, server);
 }
 
 #include "parser_callbacks.h"
 
-ebb_request* ebb_request_new(ebb_server *server, tcp_client *client)
+ebb_client* ebb_client_new(ebb_server *server, tcp_client *socket)
 {
-  ebb_request *request = g_new0(ebb_request, 1);
+  ebb_client *client = g_new0(ebb_client, 1);
   
-  request->server = server;
-  request->client = client;
+  client->server = server;
+  client->socket = socket;
   
   /* http_parser */
-  request->parser = g_new0(http_parser, 1);
-  http_parser_init(request->parser);
-  request->parser->data = request;
-  request->parser->http_field = ebb_http_field_cb;
-  request->parser->request_method = ebb_request_method_cb;
-  request->parser->request_uri = ebb_request_uri_cb;
-  request->parser->fragment = ebb_fragment_cb;
-  request->parser->request_path = ebb_request_path_cb;
-  request->parser->query_string = ebb_query_string_cb;
-  request->parser->http_version = ebb_http_version_cb;
-  request->parser->header_done = ebb_header_done_cb;
+  client->parser = g_new0(http_parser, 1);
+  http_parser_init(client->parser);
+  client->parser->data = client;
+  client->parser->http_field = ebb_http_field_cb;
+  client->parser->request_method = ebb_request_method_cb;
+  client->parser->request_uri = ebb_request_uri_cb;
+  client->parser->fragment = ebb_fragment_cb;
+  client->parser->request_path = ebb_request_path_cb;
+  client->parser->query_string = ebb_query_string_cb;
+  client->parser->http_version = ebb_http_version_cb;
+  client->parser->header_done = ebb_header_done_cb;
   
   /* buffer */
-  request->buffer = g_string_new("");
+  client->buffer = g_string_new("");
   
   /* env */
-  request->env = g_queue_new();
+  client->env = g_queue_new();
   
-  return request;
+  return client;
 }
 
-void ebb_request_free(ebb_request *request)
+void ebb_client_free(ebb_client *client)
 {
   /* http_parser */
-  http_parser_finish(request->parser);
+  http_parser_finish(client->parser);
   
   /* buffer */
-  g_string_free(request->buffer, TRUE);
+  g_string_free(client->buffer, TRUE);
   
   /* env */
   ebb_env_pair *pair;
-  while((pair = g_queue_pop_head(request->env)))
+  while((pair = g_queue_pop_head(client->env)))
     ebb_env_pair_free(pair);
-  g_queue_free(request->env);
+  g_queue_free(client->env);
   
-  free(request);
+  free(client);
 }
 
 ebb_env_pair* ebb_env_pair_new(const char *field, size_t flen, const char *value, size_t vlen)
