@@ -24,20 +24,10 @@
 
 #define TCP_CHUNKSIZE (16*1024)
 
-int misc_lookup_host(char *address, struct in_addr *addr)
-{
-  struct hostent *host;
-  host = gethostbyname(address);
-  if (host && host->h_addr_list[0]) {
-    memmove(addr, host->h_addr_list[0], sizeof(struct in_addr));
-    return 0;
-  }
-  return -1;
-}
-
 /* Returns the number of bytes remaining to write */
 int tcp_client_write(tcp_client *client, const char *data, int length)
 {
+  assert(client->open);
   int sent = send(client->fd, data, length, 0);
   if(sent < 0) {
     tcp_error(strerror(errno));
@@ -53,23 +43,40 @@ void tcp_client_on_readable( struct ev_loop *loop
                               )
 {
   tcp_client *client = (tcp_client*)(watcher->data);
-  char buffer[TCP_CHUNKSIZE]; // XXX this is allocated on the stack? is this efficent?
   int length;
-    
+  
+  // check for error in revents
+  if(EV_ERROR & revents) {
+    tcp_error("tcp_client_on_readable() got error event, closing client");
+    tcp_client_free(client);
+    return;
+  }
+  
+  assert(client->open);
+  
   if(client->read_cb == NULL) return;
   
-  length = recv(client->fd, buffer, TCP_CHUNKSIZE, 0);
+  length = recv(client->fd, client->read_buffer, TCP_CHUNKSIZE, 0);
   
-  if(length < 0) {
+  if(length == 0) {
+    tcp_client_free(client);
+    g_debug("Connection reset by peer?");
+    return;
+  } else if(length < 0) {
+    if(errno == EBADF) {
+      g_debug("errno says Connection reset by peer"); 
+    }
     tcp_error("Error recving data: %s", strerror(errno));
     tcp_client_close(client);
     return;
   }
   
+  g_debug("Read %d bytes", length);
+  
   /* User needs to copy the data out of the buffer or process it before
    * leaving this function.
    */
-  client->read_cb(buffer, length, client->read_cb_data);
+  client->read_cb(client->read_buffer, length, client->read_cb_data);
 }
 
 tcp_client* tcp_client_new(tcp_server *server)
@@ -85,6 +92,7 @@ tcp_client* tcp_client_new(tcp_server *server)
     tcp_client_free(client);
     return NULL;
   }
+  client->open = TRUE;
   
   int r = fcntl(client->fd, F_SETFL, O_NONBLOCK);
   if(r < 0) {
@@ -93,10 +101,12 @@ tcp_client* tcp_client_new(tcp_server *server)
     return NULL;
   }
   
+  client->read_buffer = (char*)malloc(sizeof(char)*TCP_CHUNKSIZE);
+  
   client->read_watcher = g_new0(struct ev_io, 1);
   client->read_watcher->data = client;
   ev_init (client->read_watcher, tcp_client_on_readable);
-  ev_io_set (client->read_watcher, client->fd, EV_READ);
+  ev_io_set (client->read_watcher, client->fd, EV_READ | EV_ERROR);
   ev_io_start (server->loop, client->read_watcher);
   
   return client;
@@ -105,23 +115,29 @@ tcp_client* tcp_client_new(tcp_server *server)
 void tcp_client_free(tcp_client *client)
 {
   tcp_client_close(client);  
+  free(client->read_buffer);
   free(client);
 }
 
 void tcp_client_close(tcp_client *client)
 {
+  assert(client->open);
+  
   if(client->read_watcher) {
-    //g_logv("killing read watcher\n");
+    g_debug("killing read watcher\n");
     ev_io_stop(client->parent->loop, client->read_watcher);
     free(client->read_watcher);
     client->read_watcher = NULL;
   }
   close(client->fd);
+  client->open = FALSE;
 }
 
 tcp_server* tcp_server_new()
 {
   int r;
+  int flags = 1;
+  
   tcp_server *server = g_new0(tcp_server, 1);
   
   server->fd = socket(PF_INET, SOCK_STREAM, 0);
@@ -131,19 +147,43 @@ tcp_server* tcp_server_new()
     tcp_server_free(server);
     return NULL;
   }
-  // set SO_REUSEADDR?
+  
+  r = setsockopt(server->fd, SOL_SOCKET, SO_REUSEADDR, &flags, sizeof(flags));
+  if(r < 0) {
+    tcp_error("failed to set setsock to reuseaddr");
+    tcp_server_free(server);
+    return NULL;
+  }
+  /*
+  r = setsockopt(server->fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
+  if(r < 0) {
+    tcp_error("failed to set socket to nodelay");
+    tcp_server_free(server);
+    return NULL;
+  }
+  */
+  
   server->loop = ev_default_loop(0);
+  server->clients = g_queue_new();
+  server->open = FALSE;
   return server;
 }
 
 void tcp_server_free(tcp_server *server)
 {
   tcp_server_close(server);
+  g_queue_free(server->clients);
   free(server);
 }
 
 void tcp_server_close(tcp_server *server)
 {
+  assert(server->open);
+  
+  tcp_client *client;
+  while((client = g_queue_pop_head(server->clients)))
+    tcp_client_close(client);
+  
   if(server->port_s) {
     free(server->port_s);
     server->port_s = NULL;
@@ -158,7 +198,10 @@ void tcp_server_close(tcp_server *server)
     free(server->accept_watcher);
     server->accept_watcher = NULL;
   }
+  ev_unloop(server->loop, EVUNLOOP_ALL);
+  
   close(server->fd);
+  server->open = FALSE;
 }
 
 void tcp_server_accept( struct ev_loop *loop
@@ -172,7 +215,7 @@ void tcp_server_accept( struct ev_loop *loop
   assert(server->loop == loop);
   
   client = tcp_client_new(server);
-  //g_queue_push_head(server->children, (gpointer)client);
+  g_queue_push_head(server->clients, (gpointer)client);
   
   if(server->accept_cb != NULL)
     server->accept_cb(client, server->accept_cb_data);
@@ -226,13 +269,16 @@ void tcp_server_listen ( tcp_server *server
     goto error;
   }
   
+  assert(server->open == FALSE);
+  server->open = TRUE;
+  
   server->accept_watcher = g_new0(struct ev_io, 1);
   server->accept_watcher->data = server;
   server->accept_cb = accept_cb;
   server->accept_cb_data = accept_cb_data;
   
   ev_init (server->accept_watcher, tcp_server_accept);
-  ev_io_set (server->accept_watcher, server->fd, EV_READ);
+  ev_io_set (server->accept_watcher, server->fd, EV_READ | EV_ERROR);
   ev_io_start (server->loop, server->accept_watcher);
   ev_loop (server->loop, 0);
   return;

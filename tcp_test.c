@@ -18,13 +18,15 @@ GString *unit_test_input;
 void unit_test_read_cb(char *buffer, int length, void *data)
 {
   tcp_client *client = (tcp_client*)(data);
-  GString *reversed = g_string_new(g_utf8_strreverse(buffer, length));
+  char *reversed = g_utf8_strreverse(buffer, length);
   
-  //g_string_append_c(reversed, '\n');
+  printf("read_cb called!\n");
+  sleep(1);  
+  //g_string_append_len(unit_test_input, buffer, length);
   
-  g_string_append_len(unit_test_input, buffer, length);
+  tcp_client_write(client, reversed, length);
   
-  tcp_client_write(client, reversed->str, reversed->len);
+  free(reversed);
 }
 
 void unit_test_accept(tcp_client *client, void *data)
@@ -32,9 +34,6 @@ void unit_test_accept(tcp_client *client, void *data)
   fprintf(stdout, "Connection\n");
   client->read_cb = unit_test_read_cb;
   client->read_cb_data = client;
-  
-  //tcp_client_close(client);
-  //tcp_server_close(server);
 }
 
 int main(void)

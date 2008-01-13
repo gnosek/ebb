@@ -11,7 +11,7 @@ module Ebb
     
     def initialize(app, options={})
       @host = options[:Host] || '0.0.0.0'
-      @port = options[:Port].to_i || 4001
+      @port = (options[:Port] || 4001).to_i
       @app = app
     end
     
@@ -20,20 +20,27 @@ module Ebb
     # client is a TCPSocket
     # XXX: push this code to C?
     def process(client)
-      status, header, body = @app.call(client.env)
-      
+      status, headers, body = @app.call(client.env)
+            
       client.write("HTTP/1.1 %d %s\r\n" % [status, HTTP_STATUS_CODES[status]])
       
       if body.respond_to? :length and status != 304
         client.write("Connection: close\r\n")
-        header['Content-Length'] = body.length
+        headers['Content-Length'] = body.length
       end
       
       headers.each { |k, v| client.write("#{k}: #{v}\r\n") }
+      client.write("\r\n")
       body.each { |part| client.write(part) }
     ensure
-      body.close if body.respond_to? :close
+      body.close if body and body.respond_to? :close
       client.close
+    end
+    
+    def start
+      trap('INT')  { puts "got INT"; self.stop }
+      trap('TERM') { puts "got TERM"; self.stop }
+      _start
     end
   end
   

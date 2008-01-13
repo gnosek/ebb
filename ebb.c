@@ -51,6 +51,8 @@ void* ebb_handle_request(void *_client)
   
   client->server->request_cb(client, client->server->request_cb_data);
   
+  ebb_client_free(client);
+  
   pthread_exit(NULL);
   return NULL;
 }

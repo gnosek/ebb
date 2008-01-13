@@ -22,7 +22,8 @@ typedef struct tcp_server tcp_server;
 #define TCP_COMMON              \
   int fd;                       \
   struct sockaddr_in sockaddr;  \
-  int buf_size;
+  int buf_size;                 \
+  int open;
 
 /*** TCP Server ***/
 
@@ -45,7 +46,7 @@ struct tcp_server {
   struct hostent *dns_info;
   char *port_s;
   
-  GQueue *children; /* TODO: implement me - fill with clients */
+  GQueue *clients;
   
   void *accept_cb_data;
   tcp_server_accept_cb_t accept_cb;
@@ -69,6 +70,7 @@ struct tcp_client {
   
   void *read_cb_data;
   tcp_client_read_cb_t read_cb;
+  char *read_buffer;
   
   ev_io *read_watcher;
 };
