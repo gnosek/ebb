@@ -22,7 +22,12 @@ Connections are processed as follows:
 Because Ebb is written entirely in C, other language bindings can be added to
 make it useful to Non-Ruby frameworks. For example a Python WSGI interface is
 forthcoming.
- 
+
+Ebb aims to be the smallest and fastest web server possible specifically for
+doing the processing for web frameworks like Rails. 
+
+It's less than 1000 lines of C code! 
+wc -l ebb.c ebb.h tcp.c tcp.h ruby_binding/ebb_ext.c
 
 = TODO
 * Bug fixing, unit testing, solidifying.
