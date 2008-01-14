@@ -20,7 +20,7 @@ void request_cb(ebb_client *client, void *data)
     ebb_env_pair_free(pair);
   }
   tcp_client_write(client->socket, "Hello.\r\n\r\n", 6);
-  tcp_client_close(client->socket);
+  ebb_client_free(client);
 }
 
 int main(void)

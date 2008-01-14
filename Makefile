@@ -3,7 +3,7 @@ SHELL = /bin/sh
 CC = gcc
 CFLAGS = `pkg-config --cflags glib-2.0` -I/opt/libev-2.01/include -L/opt/libev-2.01/lib
 
-ALL_CFLAGS = -g -Wall -O6 $(CFLAGS)
+ALL_CFLAGS = -g -Wall $(CFLAGS)
 
 OBJS = tcp.o ebb.o
 LIBS = -lev `pkg-config --libs glib-2.0` -lpthread

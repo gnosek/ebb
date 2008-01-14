@@ -25,7 +25,7 @@
 #define TCP_CHUNKSIZE (16*1024)
 
 /* Private function */
-void tcp_client_free(tcp_client *client);
+void tcp_client_stop_read_watcher(tcp_client *client);
 
 /* Returns the number of bytes remaining to write */
 int tcp_client_write(tcp_client *client, const char *data, int length)
@@ -33,7 +33,7 @@ int tcp_client_write(tcp_client *client, const char *data, int length)
   assert(client->open);
   int sent = send(client->fd, data, length, 0);
   if(sent < 0) {
-    tcp_error(strerror(errno));
+    tcp_error("Error writing: %s", strerror(errno));
     tcp_client_close(client);
     return 0;
   }
@@ -51,36 +51,40 @@ void tcp_client_on_readable( struct ev_loop *loop
   // check for error in revents
   if(EV_ERROR & revents) {
     tcp_error("tcp_client_on_readable() got error event, closing client");
-    tcp_client_free(client);
-    return;
+    goto error;
   }
   
   assert(client->open);
+  assert(client->parent->open);
+  assert(client->parent->loop == loop);
+  assert(client->read_watcher == watcher);
   
   if(client->read_cb == NULL) return;
   
   length = recv(client->fd, client->read_buffer, TCP_CHUNKSIZE, 0);
   
   if(length == 0) {
-    tcp_client_free(client);
-    g_debug("zero length read? what to do?");
+    g_debug("zero length read? what to do? killing read watcher");
+    tcp_client_stop_read_watcher(client);
     return;
+    //goto error;
   } else if(length < 0) {
-    if(errno == EBADF || errno == ECONNRESET) {
+    if(errno == EBADF || errno == ECONNRESET)
       g_debug("errno says Connection reset by peer"); 
-    } else {
+    else
       tcp_error("Error recving data: %s", strerror(errno));
-    }
-    tcp_client_free(client);
-    return;
+    goto error;
   }
   
-  g_debug("Read %d bytes", length);
+  // g_debug("Read %d bytes", length);
   
-  /* User needs to copy the data out of the buffer or process it before
-   * leaving this function.
-   */
   client->read_cb(client->read_buffer, length, client->read_cb_data);
+  /* Cannot access client beyond this point because it's possible that the
+   * user has freed it.
+   */
+   return;
+error:
+  tcp_client_close(client);
 }
 
 tcp_client* tcp_client_new(tcp_server *server)
@@ -89,20 +93,21 @@ tcp_client* tcp_client_new(tcp_server *server)
   tcp_client *client;
   
   client = g_new0(tcp_client, 1);
+  
   client->parent = server;
+  
   client->fd = accept(server->fd, (struct sockaddr*)&(client->sockaddr), &len);
   if(client->fd < 0) {
     tcp_error("Could not get client socket");
-    tcp_client_free(client);
-    return NULL;
+    goto error;
   }
+  
   client->open = TRUE;
   
   int r = fcntl(client->fd, F_SETFL, O_NONBLOCK);
   if(r < 0) {
     tcp_error("Setting nonblock mode on socket failed");
-    tcp_client_free(client);
-    return NULL;
+    goto error;
   }
   
   client->read_buffer = (char*)malloc(sizeof(char)*TCP_CHUNKSIZE);
@@ -114,36 +119,47 @@ tcp_client* tcp_client_new(tcp_server *server)
   ev_io_start (server->loop, client->read_watcher);
   
   return client;
+  
+error:
+  tcp_client_close(client);
+  return NULL;
 }
 
+void tcp_client_stop_read_watcher(tcp_client *client)
+{
+  //assert(client->open);
+  assert(client->parent->open);
+  //assert(client->read_watcher);
+  
+  if(client->read_watcher != NULL) {
+    //g_debug("killing read watcher");
+    ev_io_stop(client->parent->loop, client->read_watcher);
+    free(client->read_watcher);
+    client->read_watcher = NULL;
+  }
+}
+
+/* PRIVATE! */
 void tcp_client_free(tcp_client *client)
 {
-  if(client->open)
-    tcp_client_close(client);
+  tcp_client_close(client);
   free(client->read_buffer);
   free(client);
-  g_debug("tcp client freed");
-  
+  //g_debug("tcp client closed");
 }
 
 void tcp_client_close(tcp_client *client)
 {
   assert(client->open);
-  
-  if(client->read_watcher) {
-    g_debug("killing read watcher");
-    ev_io_stop(client->parent->loop, client->read_watcher);
-    free(client->read_watcher);
-    client->read_watcher = NULL;
-  }
+  tcp_client_stop_read_watcher(client);
   close(client->fd);
   client->open = FALSE;
+  //g_debug("tcp client closed");
 }
 
 tcp_server* tcp_server_new()
 {
   int r;
-  int flags = 1;
   
   tcp_server *server = g_new0(tcp_server, 1);
   
@@ -151,15 +167,14 @@ tcp_server* tcp_server_new()
   r = fcntl(server->fd, F_SETFL, O_NONBLOCK);
   if(r < 0) {
     tcp_error("Setting nonblock mode on socket failed");
-    tcp_server_free(server);
-    return NULL;
+    goto error;
   }
   
+  int flags = 1;
   r = setsockopt(server->fd, SOL_SOCKET, SO_REUSEADDR, &flags, sizeof(flags));
   if(r < 0) {
     tcp_error("failed to set setsock to reuseaddr");
-    tcp_server_free(server);
-    return NULL;
+    goto error;
   }
   /*
   r = setsockopt(server->fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
@@ -170,10 +185,15 @@ tcp_server* tcp_server_new()
   }
   */
   
-  server->loop = ev_default_loop(0);
+  server->loop = ev_loop_new(0);
+  
   server->clients = g_queue_new();
   server->open = FALSE;
   return server;
+
+error:
+  tcp_server_free(server);
+  return NULL;
 }
 
 void tcp_server_free(tcp_server *server)
@@ -181,6 +201,8 @@ void tcp_server_free(tcp_server *server)
   tcp_server_close(server);
   g_queue_free(server->clients);
   free(server);
+  
+  g_debug("tcp server freed.");
 }
 
 void tcp_server_close(tcp_server *server)
@@ -206,6 +228,8 @@ void tcp_server_close(tcp_server *server)
     server->accept_watcher = NULL;
   }
   ev_unloop(server->loop, EVUNLOOP_ALL);
+  ev_loop_destroy (server->loop);
+  server->loop = NULL;
   
   close(server->fd);
   server->open = FALSE;
@@ -224,8 +248,8 @@ void tcp_server_accept( struct ev_loop *loop
   
   // check for error in revents
   if(EV_ERROR & revents) {
-    tcp_error("tcp_client_on_readable() got error event, closing client");
-    tcp_server_close(server);
+    tcp_error("tcp_client_on_readable() got error event, closing free");
+    tcp_server_free(server);
     return;
   }
   

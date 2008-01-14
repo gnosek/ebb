@@ -15,18 +15,17 @@ typedef struct tcp_client tcp_client;
 typedef struct tcp_server tcp_server;
 
 
-#define TCP_LOG_DOMAIN "TCP Server"
+#define TCP_LOG_DOMAIN "TCP"
 #define tcp_error(str, ...)  \
   g_log(TCP_LOG_DOMAIN, G_LOG_LEVEL_ERROR, str, ## __VA_ARGS__);
 
 #define TCP_COMMON              \
   int fd;                       \
   struct sockaddr_in sockaddr;  \
-  int buf_size;                 \
   int open;
 
 /*** TCP Server ***/
-
+/* User is responsible for closing and freeing the tcp_client */
 typedef void (*tcp_server_accept_cb_t) (tcp_client *, void *callback_data);
 
 tcp_server* tcp_server_new();
@@ -56,11 +55,9 @@ struct tcp_server {
 };
 
 /*** TCP Client ***/
-
 typedef void (*tcp_client_read_cb_t)(char *buffer, int length, void *data);
 
-// make this private. users cannot allocate clients.. we should handle freeing them
-//void tcp_client_free(tcp_client*);
+void tcp_client_free(tcp_client *client);
 void tcp_client_close(tcp_client*);
 int tcp_client_write(tcp_client *, const char *data, int length);
 
@@ -72,7 +69,6 @@ struct tcp_client {
   void *read_cb_data;
   tcp_client_read_cb_t read_cb;
   char *read_buffer;
-  
   ev_io *read_watcher;
 };
 
