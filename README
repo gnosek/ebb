@@ -1,11 +1,31 @@
 Ebb Web Server
 
-= Design principles
- * Language independence
- * Speed
- * Thin
+= Design
+The design is similar to Evented Mongrel and the Thin web servers except that
+instead of using EventMachine (a ruby binding to libevent) the Ebb web server
+is written in C and uses the libev event loop library.
 
+Connections are processed as follows:
 
+1. libev loops and waits for incoming connections.
+
+2. When Ebb can read from a client socket, it passes the buffer into the
+   mongrel state machine which parses the headers into name value pairs. 
+
+3. Ebb starts a new thread and passes the request information and peer socket
+   to a user supplied callback. The thread lasts only for the length of that
+   callback.
+
+4. The included Ruby binding, supplying this callback transforms the request
+   into a Rack compatible "env" variable and passes it on a Rack adapter.
+
+Because Ebb is written entirely in C, other language bindings can be added to make it useful to Non-Ruby frameworks. For example a Python WSGI interface is forthcoming.
+ 
+
+= TODO
+* Bug fixing, unit testing, solidifying.
+* Fix Ruby looping problem (see ruby_binding/ebb.rb:22)
+* Python binding
 
 = License
 Copyright (c) 2007 Ryan Dahl
