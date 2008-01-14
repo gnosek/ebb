@@ -24,6 +24,9 @@
 
 #define TCP_CHUNKSIZE (16*1024)
 
+/* Private function */
+void tcp_client_free(tcp_client *client);
+
 /* Returns the number of bytes remaining to write */
 int tcp_client_write(tcp_client *client, const char *data, int length)
 {
@@ -38,9 +41,9 @@ int tcp_client_write(tcp_client *client, const char *data, int length)
 }
 
 void tcp_client_on_readable( struct ev_loop *loop
-                              , struct ev_io *watcher
-                              , int revents
-                              )
+                           , struct ev_io *watcher
+                           , int revents
+                           )
 {
   tcp_client *client = (tcp_client*)(watcher->data);
   int length;
@@ -60,14 +63,15 @@ void tcp_client_on_readable( struct ev_loop *loop
   
   if(length == 0) {
     tcp_client_free(client);
-    g_debug("Connection reset by peer?");
+    g_debug("zero length read? what to do?");
     return;
   } else if(length < 0) {
-    if(errno == EBADF) {
+    if(errno == EBADF || errno == ECONNRESET) {
       g_debug("errno says Connection reset by peer"); 
+    } else {
+      tcp_error("Error recving data: %s", strerror(errno));
     }
-    tcp_error("Error recving data: %s", strerror(errno));
-    tcp_client_close(client);
+    tcp_client_free(client);
     return;
   }
   
@@ -114,9 +118,12 @@ tcp_client* tcp_client_new(tcp_server *server)
 
 void tcp_client_free(tcp_client *client)
 {
-  tcp_client_close(client);  
+  if(client->open)
+    tcp_client_close(client);
   free(client->read_buffer);
   free(client);
+  g_debug("tcp client freed");
+  
 }
 
 void tcp_client_close(tcp_client *client)
@@ -124,7 +131,7 @@ void tcp_client_close(tcp_client *client)
   assert(client->open);
   
   if(client->read_watcher) {
-    g_debug("killing read watcher\n");
+    g_debug("killing read watcher");
     ev_io_stop(client->parent->loop, client->read_watcher);
     free(client->read_watcher);
     client->read_watcher = NULL;
@@ -212,7 +219,15 @@ void tcp_server_accept( struct ev_loop *loop
   tcp_server *server = (tcp_server*)(watcher->data);
   tcp_client *client;
   
+  assert(server->open);
   assert(server->loop == loop);
+  
+  // check for error in revents
+  if(EV_ERROR & revents) {
+    tcp_error("tcp_client_on_readable() got error event, closing client");
+    tcp_server_close(server);
+    return;
+  }
   
   client = tcp_client_new(server);
   g_queue_push_head(server->clients, (gpointer)client);
@@ -246,8 +261,6 @@ void tcp_server_listen ( tcp_server *server
     goto error;
   }
   memmove(&(server->sockaddr.sin_addr), server->dns_info->h_addr, sizeof(struct in_addr));
-  
-  //misc_lookup_host(address, &(server->sockaddr.sin_addr));
   
   /* Other socket options. These could probably be fine tuned.
    * SO_SNDBUF       set buffer size for output

@@ -59,7 +59,8 @@ struct tcp_server {
 
 typedef void (*tcp_client_read_cb_t)(char *buffer, int length, void *data);
 
-void tcp_client_free(tcp_client*);
+// make this private. users cannot allocate clients.. we should handle freeing them
+//void tcp_client_free(tcp_client*);
 void tcp_client_close(tcp_client*);
 int tcp_client_write(tcp_client *, const char *data, int length);
 

@@ -140,9 +140,12 @@ void ebb_client_free(ebb_client *client)
 {
   /* http_parser */
   http_parser_finish(client->parser);
+  free(client->parser);
   
   /* buffer */
-  g_string_free(client->buffer, TRUE);
+  char *ptr = client->buffer->str;
+  g_string_free(client->buffer, FALSE);
+  free(ptr);
   
   /* env */
   ebb_env_pair *pair;
@@ -150,7 +153,11 @@ void ebb_client_free(ebb_client *client)
     ebb_env_pair_free(pair);
   g_queue_free(client->env);
   
+  tcp_client_free(client->socket);
+  
   free(client);
+  
+  g_debug("ebb client freed");
 }
 
 ebb_env_pair* ebb_env_pair_new(const char *field, size_t flen, const char *value, size_t vlen)

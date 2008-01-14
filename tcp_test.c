@@ -21,7 +21,6 @@ void unit_test_read_cb(char *buffer, int length, void *data)
   char *reversed = g_utf8_strreverse(buffer, length);
   
   printf("read_cb called!\n");
-  sleep(1);  
   //g_string_append_len(unit_test_input, buffer, length);
   
   tcp_client_write(client, reversed, length);
