@@ -1,9 +1,10 @@
 Ebb Web Server
 
 = Design
-The design is similar to Evented Mongrel and the Thin web servers except that
-instead of using EventMachine (a ruby binding to libevent) the Ebb web server
-is written in C and uses the libev event loop library.
+
+The design is similar to the Evented Mongrel web server; except instead of
+using EventMachine (a ruby binding to libevent) the Ebb web server is written
+in C and uses the libev event loop library (http://software.schmorp.de/pkg/libev.html).
 
 Connections are processed as follows:
 
@@ -30,11 +31,13 @@ It's less than 1000 lines of C code!
 wc -l ebb.c ebb.h tcp.c tcp.h ruby_binding/ebb_ext.c
 
 = TODO
+
 * Bug fixing, unit testing, solidifying.
 * Fix Ruby looping problem (see ruby_binding/ebb.rb:22)
 * Python binding
 
 = License
+
 Copyright (c) 2007 Ryan Dahl
 
 Permission is hereby granted, free of charge, to any person obtaining
