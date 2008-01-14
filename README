@@ -19,7 +19,9 @@ Connections are processed as follows:
 4. The included Ruby binding, supplying this callback transforms the request
    into a Rack compatible "env" variable and passes it on a Rack adapter.
 
-Because Ebb is written entirely in C, other language bindings can be added to make it useful to Non-Ruby frameworks. For example a Python WSGI interface is forthcoming.
+Because Ebb is written entirely in C, other language bindings can be added to
+make it useful to Non-Ruby frameworks. For example a Python WSGI interface is
+forthcoming.
  
 
 = TODO
