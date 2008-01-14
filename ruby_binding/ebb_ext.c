@@ -1,3 +1,8 @@
+/* A ruby binding to the ebb web server
+ * Copyright (c) 2007 Ry Dahl <ry.d4hl@gmail.com>
+ * This software is released under the "MIT License". See README file for details.
+ */
+
 #include <ruby.h>
 #include <ebb.h>
 #include <tcp.h>
