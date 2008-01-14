@@ -150,11 +150,12 @@ void tcp_client_free(tcp_client *client)
 
 void tcp_client_close(tcp_client *client)
 {
-  assert(client->open);
-  tcp_client_stop_read_watcher(client);
-  close(client->fd);
-  client->open = FALSE;
-  //g_debug("tcp client closed");
+  if(client->open) {
+    tcp_client_stop_read_watcher(client);
+    close(client->fd);
+    client->open = FALSE;
+    //g_debug("tcp client closed");
+  }
 }
 
 tcp_server* tcp_server_new()

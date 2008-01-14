@@ -41,6 +41,11 @@ module Ebb
       client.close
     end
     
+    # TODO:
+    # problem here. this should be a nonblocking call that starts the server
+    # in a seperate thread. We don't want to sit in libev's loop and ignore
+    # all the ruby related things going on.
+    # Better to start a new thread (do i do this in ebb_ext.c?)
     def start
       trap('INT')  { puts "got INT"; self.stop }
       trap('TERM') { puts "got TERM"; self.stop }

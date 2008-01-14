@@ -89,7 +89,7 @@ VALUE client_close(VALUE client)
   ebb_client *_client;
   
   Data_Get_Struct(client, ebb_client, _client);
-  tcp_client_close(_client->socket); // TODO: ebb_client_close?
+  ebb_client_close(_client);
   return Qnil;
 }
 
