@@ -51,18 +51,17 @@ void ebb_on_read(char *buffer, int length, void *_client)
                      );
   
   if(http_parser_is_finished(client->parser)) {
-    // pthread_t thread; // = g_new(pthread_t, 1);
-    // int rc = pthread_create(&thread, NULL, ebb_handle_request, client);
-    ebb_handle_request(client);
-    // if(rc < 0) {
-    //   ebb_error("Could not create thread");
-    //   return TCP_CLIENT_READING_FINISHED;
-    // }
-    
-    // rc = pthread_detach(&thread);
-    //     if(rc < 0) {
-    //       ebb_error("Could not detatch thread");
-    //     }
+    pthread_t thread; // = g_new(pthread_t, 1);
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    int rc = pthread_create(&thread, &attr, ebb_handle_request, client);
+    // ebb_handle_request(client);
+    if(rc < 0) {
+      ebb_error("Could not create thread. Killing client.");
+      ebb_client_free(client);
+      return;
+    }
     return;
   }
   
@@ -88,7 +87,7 @@ void* ebb_handle_request(void *_client)
   
   client->server->request_cb(client, client->server->request_cb_data);
   
-  // pthread_exit(NULL);
+  pthread_exit(NULL);
   return NULL;
 }
 
