@@ -18,7 +18,11 @@ typedef struct tcp_server tcp_server;
 #define TCP_LOG_DOMAIN "TCP"
 #define tcp_error(str, ...)  \
   g_log(TCP_LOG_DOMAIN, G_LOG_LEVEL_ERROR, str, ## __VA_ARGS__);
-
+#define tcp_warning(str, ...)  \
+  g_log(TCP_LOG_DOMAIN, G_LOG_LEVEL_WARNING, str, ## __VA_ARGS__);
+#define tcp_info(str, ...)  \
+  g_log(TCP_LOG_DOMAIN, G_LOG_LEVEL_INFO, str, ## __VA_ARGS__);
+  
 #define TCP_COMMON              \
   int fd;                       \
   struct sockaddr_in sockaddr;  \
@@ -70,6 +74,7 @@ struct tcp_client {
   tcp_client_read_cb_t read_cb;
   char *read_buffer;
   ev_io *read_watcher;
+  ev_timer *timeout_watcher;
 };
 
 #endif tcp_h

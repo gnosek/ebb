@@ -36,8 +36,9 @@ struct ebb_server {
 /*** Ebb Client ***/
 
 ebb_client* ebb_client_new(ebb_server *, tcp_client *);
-void ebb_client_free(ebb_client *);
-void ebb_client_close(ebb_client *client);
+void ebb_client_free(ebb_client*);
+void ebb_client_close(ebb_client*);
+int ebb_client_write(ebb_client*, const char *data, int length);
 
 struct ebb_client {
   ebb_server *server;

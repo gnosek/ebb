@@ -39,8 +39,8 @@ void ebb_on_read(char *buffer, int length, void *_client)
 {
   ebb_client *client = (ebb_client*)(_client);
   
+  assert(client->socket->open);
   assert(!http_parser_is_finished(client->parser));
-  assert(client);
   
   g_string_append_len(client->buffer, buffer, length);
   
@@ -56,22 +56,15 @@ void ebb_on_read(char *buffer, int length, void *_client)
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     int rc = pthread_create(&thread, &attr, ebb_handle_request, client);
-    // ebb_handle_request(client);
-    if(rc < 0) {
-      ebb_error("Could not create thread. Killing client.");
-      ebb_client_free(client);
-      return;
-    }
-    return;
+    if(rc < 0)
+      ebb_error("Could not create thread.");
   }
-  
-  return;
 }
 
 const char *ebb_input = "ebb.input";
 const char *server_name = "SERVER_NAME";
 const char *server_port = "SERVER_PORT";
-/* User is responsible for closing and freeing the client */
+/* User is responsible for freeing the client */
 void* ebb_handle_request(void *_client)
 {
   ebb_client *client = (ebb_client*)(_client);
@@ -86,6 +79,9 @@ void* ebb_handle_request(void *_client)
     client->server->socket->port_s));
   
   client->server->request_cb(client, client->server->request_cb_data);
+  /* Cannot access client beyond this point because it's possible that the
+   * user has freed it.
+   */
   
   pthread_exit(NULL);
   return NULL;
@@ -97,16 +93,19 @@ void ebb_on_request(tcp_client *socket, void *data)
   ebb_server *server = (ebb_server*)(data);
   ebb_client *client = ebb_client_new(server, socket);
   
+  assert(client->socket->open);
+  assert(server->socket->open);
+  
   socket->read_cb = ebb_on_read;
   socket->read_cb_data = client;
 }
 
-void ebb_server_start(ebb_server *server
-                      , char *host
-                      , int port
-                      , ebb_request_cb_t request_cb
-                      , void *request_cb_data
-                      )
+void ebb_server_start( ebb_server *server
+                     , char *host
+                     , int port
+                     , ebb_request_cb_t request_cb
+                     , void *request_cb_data
+                     )
 {
   server->request_cb = request_cb;
   server->request_cb_data = request_cb_data;
@@ -171,6 +170,13 @@ void ebb_client_free(ebb_client *client)
   
   //g_debug("ebb client freed");
 }
+
+// writes to the client
+int ebb_client_write(ebb_client *this, const char *data, int length)
+{
+  return tcp_client_write(this->socket, data, length);
+}
+
 
 ebb_env_pair* ebb_env_pair_new(const char *field, size_t flen, const char *value, size_t vlen)
 {

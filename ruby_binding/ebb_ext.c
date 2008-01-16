@@ -5,7 +5,6 @@
 
 #include <ruby.h>
 #include <ebb.h>
-#include <tcp.h>
 
 static VALUE cServer;
 static VALUE cClient;
@@ -64,7 +63,7 @@ VALUE client_write(VALUE client, VALUE string)
   int written;
   
   Data_Get_Struct(client, ebb_client, _client);
-  written = tcp_client_write(_client->socket, RSTRING_PTR(string), RSTRING_LEN(string));
+  written = ebb_client_write(_client, RSTRING_PTR(string), RSTRING_LEN(string));
   return INT2FIX(written);
 }
 
@@ -87,7 +86,7 @@ VALUE client_env(VALUE client)
 VALUE client_close(VALUE client)
 {
   ebb_client *_client;
-  
+
   Data_Get_Struct(client, ebb_client, _client);
   ebb_client_close(_client);
   return Qnil;

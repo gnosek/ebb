@@ -30,14 +30,34 @@ void tcp_client_stop_read_watcher(tcp_client *client);
 /* Returns the number of bytes remaining to write */
 int tcp_client_write(tcp_client *client, const char *data, int length)
 {
+  if(!client->open) {
+    tcp_warning("Trying to write to a client that isn't open.");
+    return 0;
+  }
   assert(client->open);
   int sent = send(client->fd, data, length, 0);
   if(sent < 0) {
-    tcp_error("Error writing: %s", strerror(errno));
+    tcp_warning("Error writing: %s", strerror(errno));
     tcp_client_close(client);
     return 0;
   }
+  ev_timer_again(client->parent->loop, client->timeout_watcher);
+  
   return sent;
+}
+
+void tcp_client_on_timeout( struct ev_loop *loop
+                          , struct ev_timer *watcher
+                          , int revents
+                          )
+{
+  tcp_client *client = (tcp_client*)(watcher->data);
+  
+  assert(client->parent->loop == loop);
+  assert(client->timeout_watcher == watcher);
+  
+  tcp_client_close(client);
+  tcp_info("client timed out");
 }
 
 void tcp_client_on_readable( struct ev_loop *loop
@@ -67,7 +87,6 @@ void tcp_client_on_readable( struct ev_loop *loop
     g_debug("zero length read? what to do? killing read watcher");
     tcp_client_stop_read_watcher(client);
     return;
-    //goto error;
   } else if(length < 0) {
     if(errno == EBADF || errno == ECONNRESET)
       g_debug("errno says Connection reset by peer"); 
@@ -76,6 +95,7 @@ void tcp_client_on_readable( struct ev_loop *loop
     goto error;
   }
   
+  ev_timer_again(loop, client->timeout_watcher);
   // g_debug("Read %d bytes", length);
   
   client->read_cb(client->read_buffer, length, client->read_cb_data);
@@ -114,9 +134,14 @@ tcp_client* tcp_client_new(tcp_server *server)
   
   client->read_watcher = g_new0(struct ev_io, 1);
   client->read_watcher->data = client;
-  ev_init (client->read_watcher, tcp_client_on_readable);
-  ev_io_set (client->read_watcher, client->fd, EV_READ | EV_ERROR);
-  ev_io_start (server->loop, client->read_watcher);
+  ev_init(client->read_watcher, tcp_client_on_readable);
+  ev_io_set(client->read_watcher, client->fd, EV_READ | EV_ERROR);
+  ev_io_start(server->loop, client->read_watcher);
+  
+  client->timeout_watcher = g_new0(struct ev_timer, 1);
+  client->timeout_watcher->data = client;
+  ev_timer_init(client->timeout_watcher, tcp_client_on_timeout, 60., 60.);
+  ev_timer_start(server->loop, client->timeout_watcher);
   
   return client;
   
@@ -139,7 +164,6 @@ void tcp_client_stop_read_watcher(tcp_client *client)
   }
 }
 
-/* PRIVATE! */
 void tcp_client_free(tcp_client *client)
 {
   tcp_client_close(client);
@@ -152,6 +176,11 @@ void tcp_client_close(tcp_client *client)
 {
   if(client->open) {
     tcp_client_stop_read_watcher(client);
+    
+    ev_timer_stop(client->parent->loop, client->timeout_watcher);
+    free(client->timeout_watcher);
+    client->timeout_watcher = NULL;
+    
     close(client->fd);
     client->open = FALSE;
     //g_debug("tcp client closed");
@@ -208,6 +237,7 @@ void tcp_server_free(tcp_server *server)
 
 void tcp_server_close(tcp_server *server)
 {
+  printf("closeserver\n");
   assert(server->open);
   
   tcp_client *client;

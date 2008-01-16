@@ -9,17 +9,17 @@ void request_cb(ebb_client *client, void *data)
 {
   ebb_env_pair *pair;
   //g_message("Request");
-  tcp_client_write(client->socket, header, strlen(header));
+  ebb_client_write(client, header, strlen(header));
   
   while((pair = g_queue_pop_head(client->env))) {
-    tcp_client_write(client->socket, pair->field, pair->flen);
-    tcp_client_write(client->socket, "\r\n", 2);
-    tcp_client_write(client->socket, pair->value, pair->vlen);
-    tcp_client_write(client->socket, "\r\n\r\n", 4);
+    ebb_client_write(client, pair->field, pair->flen);
+    ebb_client_write(client, "\r\n", 2);
+    ebb_client_write(client, pair->value, pair->vlen);
+    ebb_client_write(client, "\r\n\r\n", 4);
     
     ebb_env_pair_free(pair);
   }
-  tcp_client_write(client->socket, "Hello.\r\n\r\n", 6);
+  ebb_client_write(client, "Hello.\r\n\r\n", 6);
   ebb_client_free(client);
 }
 
