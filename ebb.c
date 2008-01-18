@@ -21,18 +21,18 @@ void* ebb_handle_request(void *_client);
 ebb_server* ebb_server_new()
 {
   ebb_server *server = g_new0(ebb_server, 1);
-  server->socket = tcp_server_new();
+  server->socket = tcp_listener_new();
   return server;
 }
 
 void ebb_server_free(ebb_server *server)
 {
-  tcp_server_free(server->socket);
+  tcp_listener_free(server->socket);
 }
 
 void ebb_server_stop(ebb_server *server)
 {
-  tcp_server_close(server->socket);
+  tcp_listener_close(server->socket);
 }
 
 void ebb_on_read(char *buffer, int length, void *_client)
@@ -73,7 +73,7 @@ void* ebb_handle_request(void *_client)
     ebb_env_pair_new(ebb_input, strlen(ebb_input), client->buffer->str, client->buffer->len));
   
   g_queue_push_head(client->env, ebb_env_pair_new2(server_name, 
-    tcp_server_address(client->server->socket)));
+    tcp_listener_address(client->server->socket)));
   
   g_queue_push_head(client->env, ebb_env_pair_new2(server_port, 
     client->server->socket->port_s));
@@ -88,7 +88,7 @@ void* ebb_handle_request(void *_client)
 }
 
 
-void ebb_on_request(tcp_client *socket, void *data)
+void ebb_on_request(tcp_peer *socket, void *data)
 {
   ebb_server *server = (ebb_server*)(data);
   ebb_client *client = ebb_client_new(server, socket);
@@ -109,12 +109,12 @@ void ebb_server_start( ebb_server *server
 {
   server->request_cb = request_cb;
   server->request_cb_data = request_cb_data;
-  tcp_server_listen(server->socket, host, port, 950, ebb_on_request, server);
+  tcp_listener_listen(server->socket, host, port, 950, ebb_on_request, server);
 }
 
 #include "parser_callbacks.h"
 
-ebb_client* ebb_client_new(ebb_server *server, tcp_client *socket)
+ebb_client* ebb_client_new(ebb_server *server, tcp_peer *socket)
 {
   ebb_client *client = g_new0(ebb_client, 1);
   
@@ -146,12 +146,12 @@ ebb_client* ebb_client_new(ebb_server *server, tcp_client *socket)
 void ebb_client_close(ebb_client *client)
 {
   assert(client->socket->open);
-  tcp_client_close(client->socket);
+  tcp_peer_close(client->socket);
 }
 
 void ebb_client_free(ebb_client *client)
 {
-  tcp_client_free(client->socket);
+  tcp_peer_free(client->socket);
   
   /* http_parser */
   http_parser_finish(client->parser);
@@ -174,7 +174,7 @@ void ebb_client_free(ebb_client *client)
 // writes to the client
 int ebb_client_write(ebb_client *this, const char *data, int length)
 {
-  return tcp_client_write(this->socket, data, length);
+  return tcp_peer_write(this->socket, data, length);
 }
 
 

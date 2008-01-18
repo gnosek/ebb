@@ -11,8 +11,8 @@
 #include <glib.h>
 #include <ev.h>
 
-typedef struct tcp_client tcp_client;
-typedef struct tcp_server tcp_server;
+typedef struct tcp_peer tcp_peer;
+typedef struct tcp_listener tcp_listener;
 
 
 #define TCP_LOG_DOMAIN "TCP"
@@ -29,49 +29,49 @@ typedef struct tcp_server tcp_server;
   int open;
 
 /*** TCP Server ***/
-/* User is responsible for closing and freeing the tcp_client */
-typedef void (*tcp_server_accept_cb_t) (tcp_client *, void *callback_data);
+/* User is responsible for closing and freeing the tcp_peer */
+typedef void (*tcp_listener_accept_cb_t) (tcp_peer *, void *callback_data);
 
-tcp_server* tcp_server_new();
-void tcp_server_free(tcp_server*);
-void tcp_server_close(tcp_server*);
-void tcp_server_listen( tcp_server*
+tcp_listener* tcp_listener_new();
+void tcp_listener_free(tcp_listener*);
+void tcp_listener_close(tcp_listener*);
+void tcp_listener_listen( tcp_listener*
                       , char *address
                       , int port
                       , int backlog
-                      , tcp_server_accept_cb_t
+                      , tcp_listener_accept_cb_t
                       , void *accept_cb_data
                       );
-char* tcp_server_address(tcp_server*);
+char* tcp_listener_address(tcp_listener*);
 
-struct tcp_server {
+struct tcp_listener {
   TCP_COMMON
   struct hostent *dns_info;
   char *port_s;
   
-  GQueue *clients;
+  GQueue *peers;
   
   void *accept_cb_data;
-  tcp_server_accept_cb_t accept_cb;
+  tcp_listener_accept_cb_t accept_cb;
   
   ev_io *accept_watcher;
   struct ev_loop *loop;
 };
 
 /*** TCP Client ***/
-typedef void (*tcp_client_read_cb_t)(char *buffer, int length, void *data);
+typedef void (*tcp_peer_read_cb_t)(char *buffer, int length, void *data);
 
-void tcp_client_free(tcp_client *client);
-void tcp_client_close(tcp_client*);
-int tcp_client_write(tcp_client *, const char *data, int length);
+void tcp_peer_free(tcp_peer *peer);
+void tcp_peer_close(tcp_peer*);
+int tcp_peer_write(tcp_peer *, const char *data, int length);
 
-struct tcp_client {
+struct tcp_peer {
   TCP_COMMON
   
-  tcp_server *parent;
+  tcp_listener *parent;
   
   void *read_cb_data;
-  tcp_client_read_cb_t read_cb;
+  tcp_peer_read_cb_t read_cb;
   char *read_buffer;
   ev_io *read_watcher;
   ev_timer *timeout_watcher;

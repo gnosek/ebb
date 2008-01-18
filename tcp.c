@@ -1,9 +1,9 @@
-/* Evented TCP Server
+/* Evented TCP listener
  * Copyright (c) 2007 Ry Dahl <ry.d4hl@gmail.com>
  * This software is released under the "MIT License". See README file for details.
  */
 
-/* TODO: add timeouts for clients */
+/* TODO: add timeouts for peers */
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -25,67 +25,67 @@
 #define TCP_CHUNKSIZE (16*1024)
 
 /* Private function */
-void tcp_client_stop_read_watcher(tcp_client *client);
+void tcp_peer_stop_read_watcher(tcp_peer *peer);
 
 /* Returns the number of bytes remaining to write */
-int tcp_client_write(tcp_client *client, const char *data, int length)
+int tcp_peer_write(tcp_peer *peer, const char *data, int length)
 {
-  if(!client->open) {
-    tcp_warning("Trying to write to a client that isn't open.");
+  if(!peer->open) {
+    tcp_warning("Trying to write to a peer that isn't open.");
     return 0;
   }
-  assert(client->open);
-  int sent = send(client->fd, data, length, 0);
+  assert(peer->open);
+  int sent = send(peer->fd, data, length, 0);
   if(sent < 0) {
     tcp_warning("Error writing: %s", strerror(errno));
-    tcp_client_close(client);
+    tcp_peer_close(peer);
     return 0;
   }
-  ev_timer_again(client->parent->loop, client->timeout_watcher);
+  ev_timer_again(peer->parent->loop, peer->timeout_watcher);
   
   return sent;
 }
 
-void tcp_client_on_timeout( struct ev_loop *loop
+void tcp_peer_on_timeout( struct ev_loop *loop
                           , struct ev_timer *watcher
                           , int revents
                           )
 {
-  tcp_client *client = (tcp_client*)(watcher->data);
+  tcp_peer *peer = (tcp_peer*)(watcher->data);
   
-  assert(client->parent->loop == loop);
-  assert(client->timeout_watcher == watcher);
+  assert(peer->parent->loop == loop);
+  assert(peer->timeout_watcher == watcher);
   
-  tcp_client_close(client);
-  tcp_info("client timed out");
+  tcp_peer_close(peer);
+  tcp_info("peer timed out");
 }
 
-void tcp_client_on_readable( struct ev_loop *loop
+void tcp_peer_on_readable( struct ev_loop *loop
                            , struct ev_io *watcher
                            , int revents
                            )
 {
-  tcp_client *client = (tcp_client*)(watcher->data);
+  tcp_peer *peer = (tcp_peer*)(watcher->data);
   int length;
   
   // check for error in revents
   if(EV_ERROR & revents) {
-    tcp_error("tcp_client_on_readable() got error event, closing client");
+    tcp_error("tcp_peer_on_readable() got error event, closing peer");
     goto error;
   }
   
-  assert(client->open);
-  assert(client->parent->open);
-  assert(client->parent->loop == loop);
-  assert(client->read_watcher == watcher);
+  assert(peer->open);
+  assert(peer->parent->open);
+  assert(peer->parent->loop == loop);
+  assert(peer->read_watcher == watcher);
   
-  if(client->read_cb == NULL) return;
+  if(peer->read_cb == NULL) return;
   
-  length = recv(client->fd, client->read_buffer, TCP_CHUNKSIZE, 0);
+  length = recv(peer->fd, peer->read_buffer, TCP_CHUNKSIZE, 0);
   
   if(length == 0) {
     g_debug("zero length read? what to do? killing read watcher");
-    tcp_client_stop_read_watcher(client);
+    tcp_peer_stop_read_watcher(peer);
     return;
   } else if(length < 0) {
     if(errno == EBADF || errno == ECONNRESET)
@@ -95,227 +95,227 @@ void tcp_client_on_readable( struct ev_loop *loop
     goto error;
   }
   
-  ev_timer_again(loop, client->timeout_watcher);
+  ev_timer_again(loop, peer->timeout_watcher);
   // g_debug("Read %d bytes", length);
   
-  client->read_cb(client->read_buffer, length, client->read_cb_data);
-  /* Cannot access client beyond this point because it's possible that the
+  peer->read_cb(peer->read_buffer, length, peer->read_cb_data);
+  /* Cannot access peer beyond this point because it's possible that the
    * user has freed it.
    */
    return;
 error:
-  tcp_client_close(client);
+  tcp_peer_close(peer);
 }
 
-tcp_client* tcp_client_new(tcp_server *server)
+tcp_peer* tcp_peer_new(tcp_listener *listener)
 {
   socklen_t len;
-  tcp_client *client;
+  tcp_peer *peer;
   
-  client = g_new0(tcp_client, 1);
+  peer = g_new0(tcp_peer, 1);
   
-  client->parent = server;
+  peer->parent = listener;
   
-  client->fd = accept(server->fd, (struct sockaddr*)&(client->sockaddr), &len);
-  if(client->fd < 0) {
-    tcp_error("Could not get client socket");
+  peer->fd = accept(listener->fd, (struct sockaddr*)&(peer->sockaddr), &len);
+  if(peer->fd < 0) {
+    tcp_error("Could not get peer socket");
     goto error;
   }
   
-  client->open = TRUE;
+  peer->open = TRUE;
   
-  int r = fcntl(client->fd, F_SETFL, O_NONBLOCK);
+  int r = fcntl(peer->fd, F_SETFL, O_NONBLOCK);
   if(r < 0) {
     tcp_error("Setting nonblock mode on socket failed");
     goto error;
   }
   
-  client->read_buffer = (char*)malloc(sizeof(char)*TCP_CHUNKSIZE);
+  peer->read_buffer = (char*)malloc(sizeof(char)*TCP_CHUNKSIZE);
   
-  client->read_watcher = g_new0(struct ev_io, 1);
-  client->read_watcher->data = client;
-  ev_init(client->read_watcher, tcp_client_on_readable);
-  ev_io_set(client->read_watcher, client->fd, EV_READ | EV_ERROR);
-  ev_io_start(server->loop, client->read_watcher);
+  peer->read_watcher = g_new0(struct ev_io, 1);
+  peer->read_watcher->data = peer;
+  ev_init(peer->read_watcher, tcp_peer_on_readable);
+  ev_io_set(peer->read_watcher, peer->fd, EV_READ | EV_ERROR);
+  ev_io_start(listener->loop, peer->read_watcher);
   
-  client->timeout_watcher = g_new0(struct ev_timer, 1);
-  client->timeout_watcher->data = client;
-  ev_timer_init(client->timeout_watcher, tcp_client_on_timeout, 60., 60.);
-  ev_timer_start(server->loop, client->timeout_watcher);
+  peer->timeout_watcher = g_new0(struct ev_timer, 1);
+  peer->timeout_watcher->data = peer;
+  ev_timer_init(peer->timeout_watcher, tcp_peer_on_timeout, 60., 60.);
+  ev_timer_start(listener->loop, peer->timeout_watcher);
   
-  return client;
+  return peer;
   
 error:
-  tcp_client_close(client);
+  tcp_peer_close(peer);
   return NULL;
 }
 
-void tcp_client_stop_read_watcher(tcp_client *client)
+void tcp_peer_stop_read_watcher(tcp_peer *peer)
 {
-  //assert(client->open);
-  assert(client->parent->open);
-  //assert(client->read_watcher);
+  //assert(peer->open);
+  assert(peer->parent->open);
+  //assert(peer->read_watcher);
   
-  if(client->read_watcher != NULL) {
+  if(peer->read_watcher != NULL) {
     //g_debug("killing read watcher");
-    ev_io_stop(client->parent->loop, client->read_watcher);
-    free(client->read_watcher);
-    client->read_watcher = NULL;
+    ev_io_stop(peer->parent->loop, peer->read_watcher);
+    free(peer->read_watcher);
+    peer->read_watcher = NULL;
   }
 }
 
-void tcp_client_free(tcp_client *client)
+void tcp_peer_free(tcp_peer *peer)
 {
-  tcp_client_close(client);
-  free(client->read_buffer);
-  free(client);
-  //g_debug("tcp client closed");
+  tcp_peer_close(peer);
+  free(peer->read_buffer);
+  free(peer);
+  //g_debug("tcp peer closed");
 }
 
-void tcp_client_close(tcp_client *client)
+void tcp_peer_close(tcp_peer *peer)
 {
-  if(client->open) {
-    tcp_client_stop_read_watcher(client);
+  if(peer->open) {
+    tcp_peer_stop_read_watcher(peer);
     
-    ev_timer_stop(client->parent->loop, client->timeout_watcher);
-    free(client->timeout_watcher);
-    client->timeout_watcher = NULL;
+    ev_timer_stop(peer->parent->loop, peer->timeout_watcher);
+    free(peer->timeout_watcher);
+    peer->timeout_watcher = NULL;
     
-    close(client->fd);
-    client->open = FALSE;
-    //g_debug("tcp client closed");
+    close(peer->fd);
+    peer->open = FALSE;
+    //g_debug("tcp peer closed");
   }
 }
 
-tcp_server* tcp_server_new()
+tcp_listener* tcp_listener_new()
 {
   int r;
   
-  tcp_server *server = g_new0(tcp_server, 1);
+  tcp_listener *listener = g_new0(tcp_listener, 1);
   
-  server->fd = socket(PF_INET, SOCK_STREAM, 0);
-  r = fcntl(server->fd, F_SETFL, O_NONBLOCK);
+  listener->fd = socket(PF_INET, SOCK_STREAM, 0);
+  r = fcntl(listener->fd, F_SETFL, O_NONBLOCK);
   if(r < 0) {
     tcp_error("Setting nonblock mode on socket failed");
     goto error;
   }
   
   int flags = 1;
-  r = setsockopt(server->fd, SOL_SOCKET, SO_REUSEADDR, &flags, sizeof(flags));
+  r = setsockopt(listener->fd, SOL_SOCKET, SO_REUSEADDR, &flags, sizeof(flags));
   if(r < 0) {
     tcp_error("failed to set setsock to reuseaddr");
     goto error;
   }
   /*
-  r = setsockopt(server->fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
+  r = setsockopt(listener->fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
   if(r < 0) {
     tcp_error("failed to set socket to nodelay");
-    tcp_server_free(server);
+    tcp_listener_free(listener);
     return NULL;
   }
   */
   
-  server->loop = ev_loop_new(0);
+  listener->loop = ev_loop_new(0);
   
-  server->clients = g_queue_new();
-  server->open = FALSE;
-  return server;
+  listener->peers = g_queue_new();
+  listener->open = FALSE;
+  return listener;
 
 error:
-  tcp_server_free(server);
+  tcp_listener_free(listener);
   return NULL;
 }
 
-void tcp_server_free(tcp_server *server)
+void tcp_listener_free(tcp_listener *listener)
 {
-  tcp_server_close(server);
-  g_queue_free(server->clients);
-  free(server);
+  tcp_listener_close(listener);
+  g_queue_free(listener->peers);
+  free(listener);
   
-  g_debug("tcp server freed.");
+  g_debug("tcp listener freed.");
 }
 
-void tcp_server_close(tcp_server *server)
+void tcp_listener_close(tcp_listener *listener)
 {
-  printf("closeserver\n");
-  assert(server->open);
+  printf("closelistener\n");
+  assert(listener->open);
   
-  tcp_client *client;
-  while((client = g_queue_pop_head(server->clients)))
-    tcp_client_close(client);
+  tcp_peer *peer;
+  while((peer = g_queue_pop_head(listener->peers)))
+    tcp_peer_close(peer);
   
-  if(server->port_s) {
-    free(server->port_s);
-    server->port_s = NULL;
+  if(listener->port_s) {
+    free(listener->port_s);
+    listener->port_s = NULL;
   }
-  if(server->dns_info) {
-    free(server->dns_info);
-    server->dns_info = NULL;
+  if(listener->dns_info) {
+    free(listener->dns_info);
+    listener->dns_info = NULL;
   }
-  if(server->accept_watcher) {
+  if(listener->accept_watcher) {
     printf("killing accept watcher\n");
-    ev_io_stop(server->loop, server->accept_watcher);
-    free(server->accept_watcher);
-    server->accept_watcher = NULL;
+    ev_io_stop(listener->loop, listener->accept_watcher);
+    free(listener->accept_watcher);
+    listener->accept_watcher = NULL;
   }
-  ev_unloop(server->loop, EVUNLOOP_ALL);
-  ev_loop_destroy (server->loop);
-  server->loop = NULL;
+  ev_unloop(listener->loop, EVUNLOOP_ALL);
+  ev_loop_destroy (listener->loop);
+  listener->loop = NULL;
   
-  close(server->fd);
-  server->open = FALSE;
+  close(listener->fd);
+  listener->open = FALSE;
 }
 
-void tcp_server_accept( struct ev_loop *loop
+void tcp_listener_accept( struct ev_loop *loop
                       , struct ev_io *watcher
                       , int revents
                       )
 {
-  tcp_server *server = (tcp_server*)(watcher->data);
-  tcp_client *client;
+  tcp_listener *listener = (tcp_listener*)(watcher->data);
+  tcp_peer *peer;
   
-  assert(server->open);
-  assert(server->loop == loop);
+  assert(listener->open);
+  assert(listener->loop == loop);
   
   // check for error in revents
   if(EV_ERROR & revents) {
-    tcp_error("tcp_client_on_readable() got error event, closing free");
-    tcp_server_free(server);
+    tcp_error("tcp_peer_on_readable() got error event, closing free");
+    tcp_listener_free(listener);
     return;
   }
   
-  client = tcp_client_new(server);
-  g_queue_push_head(server->clients, (gpointer)client);
+  peer = tcp_peer_new(listener);
+  g_queue_push_head(listener->peers, (gpointer)peer);
   
-  if(server->accept_cb != NULL)
-    server->accept_cb(client, server->accept_cb_data);
+  if(listener->accept_cb != NULL)
+    listener->accept_cb(peer, listener->accept_cb_data);
   
   return;
 }
 
-void tcp_server_listen ( tcp_server *server
+void tcp_listener_listen ( tcp_listener *listener
                        , char *address
                        , int port
                        , int backlog
-                       , tcp_server_accept_cb_t accept_cb
+                       , tcp_listener_accept_cb_t accept_cb
                        , void *accept_cb_data
                        )
 {
   int r;
   
-  server->sockaddr.sin_family = AF_INET;
-  server->sockaddr.sin_port = htons(port);
+  listener->sockaddr.sin_family = AF_INET;
+  listener->sockaddr.sin_port = htons(port);
   
   /* for easy access to the port */
-  server->port_s = malloc(sizeof(char)*8);
-  sprintf(server->port_s, "%d", port);
+  listener->port_s = malloc(sizeof(char)*8);
+  sprintf(listener->port_s, "%d", port);
   
-  server->dns_info = gethostbyname(address);
-  if (!(server->dns_info && server->dns_info->h_addr)) {
+  listener->dns_info = gethostbyname(address);
+  if (!(listener->dns_info && listener->dns_info->h_addr)) {
     tcp_error("Could not look up hostname %s", address);
     goto error;
   }
-  memmove(&(server->sockaddr.sin_addr), server->dns_info->h_addr, sizeof(struct in_addr));
+  memmove(&(listener->sockaddr.sin_addr), listener->dns_info->h_addr, sizeof(struct in_addr));
   
   /* Other socket options. These could probably be fine tuned.
    * SO_SNDBUF       set buffer size for output
@@ -325,41 +325,41 @@ void tcp_server_listen ( tcp_server *server
    * SO_SNDTIMEO     set timeout value for output
    * SO_RCVTIMEO     set timeout value for input
    */
-  r = bind(server->fd, (struct sockaddr*)&(server->sockaddr), sizeof(server->sockaddr));
+  r = bind(listener->fd, (struct sockaddr*)&(listener->sockaddr), sizeof(listener->sockaddr));
   if(r < 0) {
     tcp_error("Failed to bind to %s %d", address, port);
     goto error;
   }
 
-  r = listen(server->fd, backlog);
+  r = listen(listener->fd, backlog);
   if(r < 0) {
     tcp_error("listen() failed");
     goto error;
   }
   
-  assert(server->open == FALSE);
-  server->open = TRUE;
+  assert(listener->open == FALSE);
+  listener->open = TRUE;
   
-  server->accept_watcher = g_new0(struct ev_io, 1);
-  server->accept_watcher->data = server;
-  server->accept_cb = accept_cb;
-  server->accept_cb_data = accept_cb_data;
+  listener->accept_watcher = g_new0(struct ev_io, 1);
+  listener->accept_watcher->data = listener;
+  listener->accept_cb = accept_cb;
+  listener->accept_cb_data = accept_cb_data;
   
-  ev_init (server->accept_watcher, tcp_server_accept);
-  ev_io_set (server->accept_watcher, server->fd, EV_READ | EV_ERROR);
-  ev_io_start (server->loop, server->accept_watcher);
-  ev_loop (server->loop, 0);
+  ev_init (listener->accept_watcher, tcp_listener_accept);
+  ev_io_set (listener->accept_watcher, listener->fd, EV_READ | EV_ERROR);
+  ev_io_start (listener->loop, listener->accept_watcher);
+  ev_loop (listener->loop, 0);
   return;
   
 error:
-  tcp_server_close(server);
+  tcp_listener_close(listener);
   return;
 }
 
-char* tcp_server_address(tcp_server *server)
+char* tcp_listener_address(tcp_listener *listener)
 {
-  if(server->dns_info)
-    return server->dns_info->h_name;
+  if(listener->dns_info)
+    return listener->dns_info->h_name;
   else
     return NULL;
 }

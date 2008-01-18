@@ -28,21 +28,21 @@ void ebb_server_stop(ebb_server*);
 void ebb_server_start(ebb_server*, char *host, int port, ebb_request_cb_t, void *request_cb_data);
 
 struct ebb_server {
-  tcp_server *socket;
+  tcp_listener *socket;
   void *request_cb_data;
   ebb_request_cb_t request_cb;
 };
 
 /*** Ebb Client ***/
 
-ebb_client* ebb_client_new(ebb_server *, tcp_client *);
+ebb_client* ebb_client_new(ebb_server *, tcp_peer *);
 void ebb_client_free(ebb_client*);
 void ebb_client_close(ebb_client*);
 int ebb_client_write(ebb_client*, const char *data, int length);
 
 struct ebb_client {
   ebb_server *server;
-  tcp_client *socket;
+  tcp_peer *socket;
   http_parser *parser;
   GQueue *env; /* queue of ebb_env_pairs */
   GString *buffer;
