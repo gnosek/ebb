@@ -1,13 +1,22 @@
-SHELL = /bin/sh
+####### Edit me ########################################
+
+GLIB_CFLAGS = `pkg-config --cflags glib-2.0`
+GLIB_LIBS   = `pkg-config --libs glib-2.0`
+
+LIBEV_PREFIX = /opt/libev-2.01
+LIBEV_CFLAGS = -I$(LIBEV_PREFIX)/include 
+LIBEV_LIBS   = -L$(LIBEV_PREFIX)/lib -lev 
+
+########################################################
+
 
 CC = gcc
-CFLAGS = `pkg-config --cflags glib-2.0` -I/opt/libev-2.01/include -L/opt/libev-2.01/lib
+CFLAGS = $(GLIB_CFLAGS) $(LIBEV_CFLAGS)
+LIBS = $(LIBEV_LIBS) $(GLIB_LIBS) -lpthread
 
 ALL_CFLAGS = -g -Wall $(CFLAGS)
 
 OBJS = tcp.o ebb.o
-LIBS = -lev `pkg-config --libs glib-2.0` -lpthread
-#EXE = test_server ebb_test
 TESTS = tcp_test ebb_test
 
 %.o : %.c Makefile
@@ -21,7 +30,7 @@ all: $(TESTS) $(OBJS) mongrel_parser ruby_binding
 parser.o: mongrel_parser
 
 mongrel_parser:
-	$(MAKE) -C ./mongrel
+	make -C ./mongrel
 
 ruby_binding:
 	rake -f ruby_binding/Rakefile
@@ -33,3 +42,4 @@ test: test_server test.rb
 clean:
 	rm -f $(OBJS) $(TESTS)
 	$(MAKE) -C ./mongrel clean
+	rake -f ruby_binding/Rakefile clean
