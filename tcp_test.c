@@ -44,11 +44,11 @@ int main(void)
   g_log_set_handler (TCP_LOG_DOMAIN, G_LOG_LEVEL_MASK | G_LOG_FLAG_FATAL
                       | G_LOG_FLAG_RECURSION, unit_test_error, NULL);
   
-  fprintf(stdout, "Starting listener at 0.0.0.0 31337\n");
+  fprintf(stdout, "Starting listener at 0.0.0.0 1337\n");
   
-  tcp_listener_listen(listener, "localhost", 31337, 1024, unit_test_accept, NULL);
+  tcp_listener_listen(listener, "localhost", 1337, unit_test_accept, NULL);
   
-  tcp_listener_close(listener);
+  tcp_listener_free(listener);
   
   return 0; // success
 }

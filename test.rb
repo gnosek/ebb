@@ -7,7 +7,7 @@ class ServerTest < Test::Unit::TestCase
   def test_server
     system %q{./tcp_test > /dev/null &}
     sleep 0.5
-    TCPSocket.open('localhost', 31337) do |socket|
+    TCPSocket.open('localhost', 1337) do |socket|
       ["Hello", "World", "foo bar"].each do |w|
         socket.write w
         assert_equal w.reverse, socket.read(w.length)

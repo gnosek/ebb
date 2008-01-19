@@ -28,9 +28,9 @@ int main(void)
   ebb_server *server;
   server = ebb_server_new();
   
-  fprintf(stdout, "Starting server at 0.0.0.0 31337\n");
+  fprintf(stdout, "Starting server at 0.0.0.0 1337\n");
   
-  ebb_server_start(server, "localhost", 31337, request_cb, NULL);
+  ebb_server_start(server, "localhost", 1337, request_cb, NULL);
   
   
   return 0; // success

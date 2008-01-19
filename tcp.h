@@ -14,6 +14,8 @@
 typedef struct tcp_peer tcp_peer;
 typedef struct tcp_listener tcp_listener;
 
+#define TCP_CHUNKSIZE (16*1024)
+#define TCP_MAX_PEERS 950
 
 #define TCP_LOG_DOMAIN "TCP"
 #define tcp_error(str, ...)  \
@@ -24,44 +26,13 @@ typedef struct tcp_listener tcp_listener;
   g_log(TCP_LOG_DOMAIN, G_LOG_LEVEL_INFO, str, ## __VA_ARGS__);
   
 #define TCP_COMMON              \
+  unsigned open : 1;            \
   int fd;                       \
-  struct sockaddr_in sockaddr;  \
-  int open;
+  struct sockaddr_in sockaddr;
 
-/*** TCP Server ***/
-/* User is responsible for closing and freeing the tcp_peer */
-typedef void (*tcp_listener_accept_cb_t) (tcp_peer *, void *callback_data);
-
-tcp_listener* tcp_listener_new();
-void tcp_listener_free(tcp_listener*);
-void tcp_listener_close(tcp_listener*);
-void tcp_listener_listen( tcp_listener*
-                      , char *address
-                      , int port
-                      , int backlog
-                      , tcp_listener_accept_cb_t
-                      , void *accept_cb_data
-                      );
-char* tcp_listener_address(tcp_listener*);
-
-struct tcp_listener {
-  TCP_COMMON
-  struct hostent *dns_info;
-  char *port_s;
-  
-  GQueue *peers;
-  
-  void *accept_cb_data;
-  tcp_listener_accept_cb_t accept_cb;
-  
-  ev_io *accept_watcher;
-  struct ev_loop *loop;
-};
-
-/*** TCP Client ***/
+/*** TCP Peer ***/
 typedef void (*tcp_peer_read_cb_t)(char *buffer, int length, void *data);
 
-void tcp_peer_free(tcp_peer *peer);
 void tcp_peer_close(tcp_peer*);
 int tcp_peer_write(tcp_peer *, const char *data, int length);
 
@@ -72,9 +43,38 @@ struct tcp_peer {
   
   void *read_cb_data;
   tcp_peer_read_cb_t read_cb;
-  char *read_buffer;
-  ev_io *read_watcher;
-  ev_timer *timeout_watcher;
+  char read_buffer[TCP_CHUNKSIZE];
+  ev_io read_watcher;
+  ev_timer timeout_watcher;
+};
+
+
+/*** TCP Listener ***/
+typedef void (*tcp_listener_accept_cb_t) (tcp_peer *, void *callback_data);
+
+tcp_listener* tcp_listener_new();
+void tcp_listener_free(tcp_listener*);
+void tcp_listener_close(tcp_listener*);
+void tcp_listener_listen( tcp_listener*
+                        , char *address
+                        , int port
+                        , tcp_listener_accept_cb_t
+                        , void *accept_cb_data
+                        );
+char* tcp_listener_address(tcp_listener*);
+
+struct tcp_listener {
+  TCP_COMMON
+  struct hostent *dns_info;
+  char *port_s;
+  
+  void *accept_cb_data;
+  tcp_listener_accept_cb_t accept_cb;
+  
+  ev_io *accept_watcher;
+  struct ev_loop *loop;
+  
+  struct tcp_peer peers[TCP_MAX_PEERS];
 };
 
 #endif tcp_h

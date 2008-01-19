@@ -69,6 +69,8 @@ void* ebb_handle_request(void *_client)
 {
   ebb_client *client = (ebb_client*)(_client);
   
+  assert(client->socket->open);
+  
   g_queue_push_head(client->env, 
     ebb_env_pair_new(ebb_input, strlen(ebb_input), client->buffer->str, client->buffer->len));
   
@@ -109,7 +111,7 @@ void ebb_server_start( ebb_server *server
 {
   server->request_cb = request_cb;
   server->request_cb_data = request_cb_data;
-  tcp_listener_listen(server->socket, host, port, 950, ebb_on_request, server);
+  tcp_listener_listen(server->socket, host, port, ebb_on_request, server);
 }
 
 #include "parser_callbacks.h"
@@ -151,7 +153,7 @@ void ebb_client_close(ebb_client *client)
 
 void ebb_client_free(ebb_client *client)
 {
-  tcp_peer_free(client->socket);
+  tcp_peer_close(client->socket);
   
   /* http_parser */
   http_parser_finish(client->parser);
