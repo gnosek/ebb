@@ -12,10 +12,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <ev.h>
 #include <glib.h>
-
 #include <assert.h>
 
 #include "tcp.h"
@@ -27,10 +27,10 @@ void tcp_peer_stop_read_watcher(tcp_peer *peer);
 int tcp_peer_write(tcp_peer *peer, const char *data, int length)
 {
   if(!peer->open) {
-    tcp_warning("Trying to write to a peer that isn't open.");
+    //tcp_warning("Trying to write to a peer that isn't open.");
     return 0;
   }
-  assert(peer->open);
+  
   int sent = send(peer->fd, data, length, 0);
   if(sent < 0) {
     tcp_warning("Error writing: %s", strerror(errno));
@@ -80,7 +80,7 @@ void tcp_peer_on_readable( struct ev_loop *loop
   length = recv(peer->fd, peer->read_buffer, TCP_CHUNKSIZE, 0);
   
   if(length == 0) {
-    g_debug("zero length read? what to do?");
+    //g_debug("zero length read? what to do?");
     tcp_peer_close(peer);
     //tcp_peer_stop_read_watcher(peer);
     return;
@@ -127,10 +127,10 @@ tcp_peer* tcp_peer_new(tcp_listener *listener)
   peer->open = TRUE; /* set open ASAP */
   
   /* DEBUG */
-  int count = 0;
-  for(i = 0; i < TCP_MAX_PEERS; i++)
-    if(listener->peers[i].open) count += 1;
-  tcp_info("%d open connections", count);
+  // int count = 0;
+  // for(i = 0; i < TCP_MAX_PEERS; i++)
+  //   if(listener->peers[i].open) count += 1;
+  // tcp_info("%d open connections", count);
   
   
   peer->parent = listener;
@@ -194,21 +194,23 @@ tcp_listener* tcp_listener_new(struct ev_loop *loop)
   
   listener->fd = socket(PF_INET, SOCK_STREAM, 0);
   r = fcntl(listener->fd, F_SETFL, O_NONBLOCK);
-  if(r < 0) {
-    tcp_error("Setting nonblock mode on socket failed");
-    goto error;
-  }
+  assert(r >= 0);
   
   int flags = 1;
   r = setsockopt(listener->fd, SOL_SOCKET, SO_REUSEADDR, &flags, sizeof(flags));
-  if(r < 0) {
-    tcp_error("failed to set setsock to reuseaddr");
-    goto error;
-  }
+  assert(r >= 0);
   
   listener->loop = loop;
-  
   listener->open = FALSE;
+  
+  /* Ignore SIGPIPE */
+  struct sigaction sigact;
+  sigact.sa_handler = SIG_IGN;
+  sigemptyset(&sigact.sa_mask);
+  sigact.sa_flags = 0;
+  r = sigaction(SIGPIPE, &sigact, 0);
+  assert(r == 0);
+  
   return listener;
 
 error:

@@ -15,7 +15,7 @@ typedef struct tcp_peer tcp_peer;
 typedef struct tcp_listener tcp_listener;
 
 #define TCP_CHUNKSIZE (16*1024)
-#define TCP_MAX_PEERS 950 /* <-- for debugging, should be, like, 950 */
+#define TCP_MAX_PEERS 950
 #define TCP_TIMEOUT 30.0
 
 #define TCP_LOG_DOMAIN "TCP"

@@ -14,7 +14,9 @@
 
 #include "mongrel/parser.h"
 #include "tcp.h"
+
 #include "ebb.h"
+#include "parser_callbacks.h"
 
 void* ebb_handle_request(void *_client);
 
@@ -111,8 +113,6 @@ void ebb_server_start( ebb_server *server
   server->request_cb_data = request_cb_data;
   tcp_listener_listen(server->socket, host, port, ebb_on_request, server);
 }
-
-#include "parser_callbacks.h"
 
 ebb_client* ebb_client_new(ebb_server *server, tcp_peer *socket)
 {

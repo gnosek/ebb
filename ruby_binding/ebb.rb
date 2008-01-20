@@ -53,7 +53,8 @@ module Ebb
       start_listening
       while process_connections
         unless @waiting_clients.empty?
-          process_client(@waiting_clients.shift)
+          client = @waiting_clients.shift
+          process_client(client)
         end
       end
     end

@@ -36,7 +36,7 @@ wc -l ebb.c ebb.h tcp.c tcp.h ruby_binding/ebb_ext.c
 * Put client's address into env
 * Python binding
 * Better build system - using scon (http://www.scons.org/)? 
-  Not autoconf
+  Not autoconf.
 
 = License
 
