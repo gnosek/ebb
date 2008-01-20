@@ -2,17 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* Unit tests */
-void unit_test_error( const gchar *log_domain
-                    , GLogLevelFlags log_level
-                    , const gchar *message
-                    , gpointer user_data
-                    )
-{
-  printf("ERROR(%d) %s\n", log_level, message);
-  if(log_level < G_LOG_LEVEL_ERROR) { exit(1); }
-}
-
 GString *unit_test_input;
 
 void unit_test_read_cb(char *buffer, int length, void *data)
@@ -37,16 +26,17 @@ void unit_test_accept(tcp_peer *peer, void *data)
 
 int main(void)
 {
+  struct ev_loop *loop = ev_default_loop (0);
   tcp_listener *listener;
   unit_test_input = g_string_new(NULL);
-  listener = tcp_listener_new(unit_test_error);
   
-  g_log_set_handler (TCP_LOG_DOMAIN, G_LOG_LEVEL_MASK | G_LOG_FLAG_FATAL
-                      | G_LOG_FLAG_RECURSION, unit_test_error, NULL);
+  listener = tcp_listener_new(loop);
   
-  fprintf(stdout, "Starting listener at 0.0.0.0 1337\n");
+  fprintf(stdout, "Starting listener at 0.0.0.0 4001\n");
   
-  tcp_listener_listen(listener, "localhost", 1337, unit_test_accept, NULL);
+  tcp_listener_listen(listener, "localhost", 4001, unit_test_accept, NULL);
+  
+  ev_loop(loop, 0);
   
   tcp_listener_free(listener);
   

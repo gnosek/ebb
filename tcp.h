@@ -15,7 +15,8 @@ typedef struct tcp_peer tcp_peer;
 typedef struct tcp_listener tcp_listener;
 
 #define TCP_CHUNKSIZE (16*1024)
-#define TCP_MAX_PEERS 950
+#define TCP_MAX_PEERS 950 /* <-- for debugging, should be, like, 950 */
+#define TCP_TIMEOUT 30.0
 
 #define TCP_LOG_DOMAIN "TCP"
 #define tcp_error(str, ...)  \
@@ -45,6 +46,15 @@ struct tcp_peer {
   tcp_peer_read_cb_t read_cb;
   char read_buffer[TCP_CHUNKSIZE];
   ev_io read_watcher;
+  
+  // ev_io write_watcher;
+  // char (*write_buffers)[100];
+  // struct {
+  //   int index;
+  //   char *position;
+  // } current_write_buffer;
+  //tcp_peer_buffer_destroy_db buffer_destroy_cb;
+  
   ev_timer timeout_watcher;
 };
 
@@ -52,7 +62,15 @@ struct tcp_peer {
 /*** TCP Listener ***/
 typedef void (*tcp_listener_accept_cb_t) (tcp_peer *, void *callback_data);
 
-tcp_listener* tcp_listener_new();
+// tcp_listener* tcp_listener_alloc();
+// void tcp_listener_init(tcp_listener*
+//                       , struct ev_loop *loo
+//                       , char *address
+//                       , int port
+//                       , tcp_listener_accept_cb_t
+//                       , void *accept_cb_data
+//                       );
+tcp_listener* tcp_listener_new(struct ev_loop *loop);
 void tcp_listener_free(tcp_listener*);
 void tcp_listener_close(tcp_listener*);
 void tcp_listener_listen( tcp_listener*

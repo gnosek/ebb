@@ -15,9 +15,6 @@ class EbbTest < Test::Unit::TestCase
     server = Ebb::Server.new(SimpleApp.new)
     server.start
     
-    puts %x{curl -Ni http://localhost:4001/blah}
-  
-  ensure
-    server.stop
+    #puts %x{curl -Ni http://localhost:4001/blah}
   end
 end

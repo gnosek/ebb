@@ -25,13 +25,13 @@ void request_cb(ebb_client *client, void *data)
 
 int main(void)
 {
-  ebb_server *server;
-  server = ebb_server_new();
+  struct ev_loop *loop = ev_default_loop(0);
+  ebb_server *server = ebb_server_new(loop);
   
-  fprintf(stdout, "Starting server at 0.0.0.0 1337\n");
+  fprintf(stdout, "Starting server at 0.0.0.0 4001\n");
   
-  ebb_server_start(server, "localhost", 1337, request_cb, NULL);
-  
-  
+  ebb_server_start(server, "localhost", 4001, request_cb, NULL);
+  ev_loop(loop, 0);
+  ebb_server_free(server);
   return 0; // success
 }

@@ -23,7 +23,7 @@ module Ebb
     # env is a hash containing all the variables of the request
     # client is a TCPSocket
     # XXX: push this code to C?
-    def process(client)
+    def process_client(client)
       status, headers, body = @app.call(client.env)
             
       client.write("HTTP/1.1 %d %s\r\n" % [status, HTTP_STATUS_CODES[status]])
@@ -47,9 +47,15 @@ module Ebb
     # all the ruby related things going on.
     # Better to start a new thread (do i do this in ebb_ext.c?)
     def start
-      trap('INT')  { puts "got INT"; self.stop }
-      trap('TERM') { puts "got TERM"; self.stop }
-      _start
+      trap('INT')  { puts "got INT"; stop }
+      trap('TERM') { puts "got TERM"; stop }
+      
+      start_listening
+      while process_connections
+        unless @waiting_clients.empty?
+          process_client(@waiting_clients.shift)
+        end
+      end
     end
   end
   

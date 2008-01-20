@@ -20,8 +20,6 @@
 
 #include "tcp.h"
 
-
-
 /* Private function */
 void tcp_peer_stop_read_watcher(tcp_peer *peer);
 
@@ -125,7 +123,15 @@ tcp_peer* tcp_peer_new(tcp_listener *listener)
     return NULL;
   }
   
+  
   peer->open = TRUE; /* set open ASAP */
+  
+  /* DEBUG */
+  int count = 0;
+  for(i = 0; i < TCP_MAX_PEERS; i++)
+    if(listener->peers[i].open) count += 1;
+  tcp_info("%d open connections", count);
+  
   
   peer->parent = listener;
   
@@ -136,11 +142,11 @@ tcp_peer* tcp_peer_new(tcp_listener *listener)
   }
   
   
-  int r = fcntl(peer->fd, F_SETFL, O_NONBLOCK);
-  if(r < 0) {
-    tcp_error("Setting nonblock mode on socket failed");
-    goto error;
-  }  
+  // int r = fcntl(peer->fd, F_SETFL, O_NONBLOCK);
+  // if(r < 0) {
+  //   tcp_error("Setting nonblock mode on socket failed");
+  //   goto error;
+  // }  
   
   peer->read_watcher.data = peer;
   ev_init(&(peer->read_watcher), tcp_peer_on_readable);
@@ -148,7 +154,7 @@ tcp_peer* tcp_peer_new(tcp_listener *listener)
   ev_io_start(listener->loop, &(peer->read_watcher));
   
   peer->timeout_watcher.data = peer;
-  ev_timer_init(&(peer->timeout_watcher), tcp_peer_on_timeout, 60., 60.);
+  ev_timer_init(&(peer->timeout_watcher), tcp_peer_on_timeout, TCP_TIMEOUT, TCP_TIMEOUT);
   ev_timer_start(listener->loop, &(peer->timeout_watcher));
   
   return peer;
@@ -163,27 +169,22 @@ void tcp_peer_stop_read_watcher(tcp_peer *peer)
   //assert(peer->open);
   assert(peer->parent->open);
   //assert(peer->read_watcher);
-  
-  
-  //g_debug("killing read watcher");
   ev_io_stop(peer->parent->loop, &(peer->read_watcher));
+  //g_debug("killing read watcher");
+  
 }
 
 void tcp_peer_close(tcp_peer *peer)
 {
   if(peer->open) {
-    g_debug("peer closed");
-    tcp_peer_stop_read_watcher(peer);
-    
+    ev_io_stop(peer->parent->loop, &(peer->read_watcher));
     ev_timer_stop(peer->parent->loop, &(peer->timeout_watcher));
-    
     close(peer->fd);
     peer->open = FALSE;
-    g_debug("tcp peer closed");
   }
 }
 
-tcp_listener* tcp_listener_new()
+tcp_listener* tcp_listener_new(struct ev_loop *loop)
 {
   int r;
   
@@ -205,7 +206,7 @@ tcp_listener* tcp_listener_new()
     goto error;
   }
   
-  listener->loop = ev_loop_new(0);
+  listener->loop = loop;
   
   listener->open = FALSE;
   return listener;
@@ -227,7 +228,7 @@ void tcp_listener_close(tcp_listener *listener)
 {
   int i;
   
-  printf("closelistener\n");
+  g_debug("close listener\n");
   assert(listener->open);
   
   tcp_peer *peer;
@@ -248,9 +249,6 @@ void tcp_listener_close(tcp_listener *listener)
     free(listener->accept_watcher);
     listener->accept_watcher = NULL;
   }
-  ev_unloop(listener->loop, EVUNLOOP_ALL);
-  ev_loop_destroy (listener->loop);
-  listener->loop = NULL;
   
   close(listener->fd);
   listener->open = FALSE;
@@ -336,9 +334,8 @@ void tcp_listener_listen ( tcp_listener *listener
   ev_init (listener->accept_watcher, tcp_listener_accept);
   ev_io_set (listener->accept_watcher, listener->fd, EV_READ | EV_ERROR);
   ev_io_start (listener->loop, listener->accept_watcher);
-  ev_loop (listener->loop, 0);
-  return;
   
+  return;
 error:
   tcp_listener_close(listener);
   return;

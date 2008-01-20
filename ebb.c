@@ -4,7 +4,7 @@
  */
 
 #include <glib.h>
-#include <pthread.h>
+#include <ev.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,10 +18,10 @@
 
 void* ebb_handle_request(void *_client);
 
-ebb_server* ebb_server_new()
+ebb_server* ebb_server_new(struct ev_loop *loop)
 {
   ebb_server *server = g_new0(ebb_server, 1);
-  server->socket = tcp_listener_new();
+  server->socket = tcp_listener_new(loop);
   return server;
 }
 
@@ -38,37 +38,36 @@ void ebb_server_stop(ebb_server *server)
 void ebb_on_read(char *buffer, int length, void *_client)
 {
   ebb_client *client = (ebb_client*)(_client);
-  
+  assert(client);
+  assert(client->socket);
   assert(client->socket->open);
-  assert(!http_parser_is_finished(client->parser));
+  //assert(client->socket->open);
+  assert(!http_parser_is_finished(&(client->parser)));
   
   g_string_append_len(client->buffer, buffer, length);
   
-  http_parser_execute( client->parser
+  http_parser_execute( &(client->parser)
                      , client->buffer->str
                      , client->buffer->len
-                     , client->parser->nread
+                     , client->parser.nread
                      );
   
-  if(http_parser_is_finished(client->parser)) {
-    pthread_t thread; // = g_new(pthread_t, 1);
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    int rc = pthread_create(&thread, &attr, ebb_handle_request, client);
-    if(rc < 0)
-      ebb_error("Could not create thread.");
+  if(http_parser_is_finished(&(client->parser))) {
+    ebb_handle_request(client);
   }
 }
 
-const char *ebb_input = "ebb.input";
-const char *server_name = "SERVER_NAME";
-const char *server_port = "SERVER_PORT";
+
 /* User is responsible for freeing the client */
 void* ebb_handle_request(void *_client)
 {
+  const char *ebb_input = "ebb.input";
+  const char *server_name = "SERVER_NAME";
+  const char *server_port = "SERVER_PORT";
   ebb_client *client = (ebb_client*)(_client);
   
+  assert(client);
+  assert(client->socket);
   assert(client->socket->open);
   
   g_queue_push_head(client->env, 
@@ -85,7 +84,6 @@ void* ebb_handle_request(void *_client)
    * user has freed it.
    */
   
-  pthread_exit(NULL);
   return NULL;
 }
 
@@ -124,17 +122,16 @@ ebb_client* ebb_client_new(ebb_server *server, tcp_peer *socket)
   client->socket = socket;
   
   /* http_parser */
-  client->parser = g_new0(http_parser, 1);
-  http_parser_init(client->parser);
-  client->parser->data = client;
-  client->parser->http_field = ebb_http_field_cb;
-  client->parser->request_method = ebb_request_method_cb;
-  client->parser->request_uri = ebb_request_uri_cb;
-  client->parser->fragment = ebb_fragment_cb;
-  client->parser->request_path = ebb_request_path_cb;
-  client->parser->query_string = ebb_query_string_cb;
-  client->parser->http_version = ebb_http_version_cb;
-  client->parser->header_done = ebb_header_done_cb;
+  http_parser_init(&(client->parser));
+  client->parser.data = client;
+  client->parser.http_field = ebb_http_field_cb;
+  client->parser.request_method = ebb_request_method_cb;
+  client->parser.request_uri = ebb_request_uri_cb;
+  client->parser.fragment = ebb_fragment_cb;
+  client->parser.request_path = ebb_request_path_cb;
+  client->parser.query_string = ebb_query_string_cb;
+  client->parser.http_version = ebb_http_version_cb;
+  client->parser.header_done = ebb_header_done_cb;
   
   /* buffer */
   client->buffer = g_string_new("");
@@ -156,8 +153,7 @@ void ebb_client_free(ebb_client *client)
   tcp_peer_close(client->socket);
   
   /* http_parser */
-  http_parser_finish(client->parser);
-  free(client->parser);
+  http_parser_finish(&(client->parser));
   
   /* buffer */
   g_string_free(client->buffer, TRUE);
@@ -169,8 +165,6 @@ void ebb_client_free(ebb_client *client)
   g_queue_free(client->env);
   
   free(client);
-  
-  //g_debug("ebb client freed");
 }
 
 // writes to the client
