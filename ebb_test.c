@@ -7,18 +7,18 @@ const char *header = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text
 
 void request_cb(ebb_client *client, void *data)
 {
-  ebb_env_pair *pair;
+  int i;
   //g_message("Request");
+  
   ebb_client_write(client, header, strlen(header));
   
-  while((pair = g_queue_pop_head(client->env))) {
-    ebb_client_write(client, pair->field, pair->flen);
+  for(i=0; i<client->env_size; i++) {
+    ebb_client_write(client, client->env_fields[i], client->env_field_lengths[i]);
     ebb_client_write(client, "\r\n", 2);
-    ebb_client_write(client, pair->value, pair->vlen);
+    ebb_client_write(client, client->env_values[i], client->env_value_lengths[i]);
     ebb_client_write(client, "\r\n\r\n", 4);
-    
-    ebb_env_pair_free(pair);
   }
+  
   ebb_client_write(client, "Hello.\r\n\r\n", 6);
   ebb_client_free(client);
 }

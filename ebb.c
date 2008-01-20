@@ -66,20 +66,24 @@ void* ebb_handle_request(void *_client)
   const char *ebb_input = "ebb.input";
   const char *server_name = "SERVER_NAME";
   const char *server_port = "SERVER_PORT";
+  char *server_name_value, *server_port_value;
   ebb_client *client = (ebb_client*)(_client);
   
   assert(client);
   assert(client->socket);
   assert(client->socket->open);
   
-  g_queue_push_head(client->env, 
-    ebb_env_pair_new(ebb_input, strlen(ebb_input), client->buffer->str, client->buffer->len));
   
-  g_queue_push_head(client->env, ebb_env_pair_new2(server_name, 
-    tcp_listener_address(client->server->socket)));
+  ebb_client_add_env(client, ebb_input, strlen(ebb_input)
+                           , client->buffer->str, client->buffer->len);
   
-  g_queue_push_head(client->env, ebb_env_pair_new2(server_port, 
-    client->server->socket->port_s));
+  server_name_value = tcp_listener_address(client->server->socket);
+  ebb_client_add_env(client, server_name, strlen(server_name)
+                           , server_name_value, strlen(server_name_value));
+  
+  server_port_value = client->server->socket->port_s;
+  ebb_client_add_env(client, server_port, strlen(server_port)
+                           , server_port_value, strlen(server_port_value));
   
   client->server->request_cb(client, client->server->request_cb_data);
   /* Cannot access client beyond this point because it's possible that the
@@ -88,7 +92,6 @@ void* ebb_handle_request(void *_client)
   
   return NULL;
 }
-
 
 void ebb_on_request(tcp_peer *socket, void *data)
 {
@@ -137,7 +140,7 @@ ebb_client* ebb_client_new(ebb_server *server, tcp_peer *socket)
   client->buffer = g_string_new("");
   
   /* env */
-  client->env = g_queue_new();
+  client->env_size = 0;
   
   return client;
 }
@@ -158,12 +161,6 @@ void ebb_client_free(ebb_client *client)
   /* buffer */
   g_string_free(client->buffer, TRUE);
   
-  /* env */
-  ebb_env_pair *pair;
-  while((pair = g_queue_pop_head(client->env)))
-    ebb_env_pair_free(pair);
-  g_queue_free(client->env);
-  
   free(client);
 }
 
@@ -173,13 +170,3 @@ int ebb_client_write(ebb_client *this, const char *data, int length)
   return tcp_peer_write(this->socket, data, length);
 }
 
-
-ebb_env_pair* ebb_env_pair_new(const char *field, size_t flen, const char *value, size_t vlen)
-{
-  ebb_env_pair *pair = g_new(ebb_env_pair, 1);
-  pair->field = field;
-  pair->flen = flen;
-  pair->value = value;
-  pair->vlen = vlen;
-  return pair;
-}

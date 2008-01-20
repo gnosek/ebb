@@ -25,26 +25,29 @@ ebb_client* ebb_client_new(ebb_server *, tcp_peer *);
 void ebb_client_free(ebb_client*);
 void ebb_client_close(ebb_client*);
 int ebb_client_write(ebb_client*, const char *data, int length);
+#define ebb_client_add_env(client, field,flen,value,vlen) \
+  client->env_fields[client->env_size] = field; \
+  client->env_field_lengths[client->env_size] = flen; \
+  client->env_values[client->env_size] = value; \
+  client->env_value_lengths[client->env_size] = vlen; \
+  client->env_size += 1;
+
+
+#define MAX_ENV 100
 
 struct ebb_client {
   ebb_server *server;
   tcp_peer *socket;
   http_parser parser;
-  GQueue *env; /* queue of ebb_env_pairs */
   GString *buffer;
+  
+  /* the ENV structure */
+  int env_size;
+  const char *env_fields[MAX_ENV];
+  size_t env_field_lengths[MAX_ENV];
+  const char *env_values[MAX_ENV];
+  size_t env_value_lengths[MAX_ENV];
 };
-
-typedef struct ebb_env_pair {
-  const char *field;
-  size_t flen;
-  const char *value;
-  size_t vlen;
-} ebb_env_pair;
-
-ebb_env_pair* ebb_env_pair_new(const char *field, size_t flen, const char *value, size_t vlen);
-#define ebb_env_pair_new2(f,v) ebb_env_pair_new(f,strlen(f),v,strlen(v))
-#define ebb_env_pair_free(pair) free(pair)
-
 
 /*** Ebb Server ***/
 

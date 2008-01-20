@@ -98,13 +98,13 @@ VALUE client_env(VALUE client)
 {
   ebb_client *_client;
   VALUE hash = rb_hash_new();
-  ebb_env_pair *pair;
+  int i;
   
   Data_Get_Struct(client, ebb_client, _client);
-  while((pair = g_queue_pop_head(_client->env))) {
+  for(i=0; i < _client->env_size; i++) {
     rb_hash_aset(hash
-                , rb_str_new(pair->field, pair->flen) // use symbol?
-                , rb_str_new(pair->value, pair->vlen)
+                , rb_str_new(_client->env_fields[i], _client->env_field_lengths[i])
+                , rb_str_new(_client->env_values[i], _client->env_value_lengths[i])
                 );
   }
   return hash;

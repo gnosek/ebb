@@ -118,11 +118,9 @@ tcp_peer* tcp_peer_new(tcp_listener *listener)
     }
   
   if(peer == NULL) {
-    /* refuse connections */
-    g_error("Too many peers");
+    g_message("Too many peers. Refusing connections.");
     return NULL;
   }
-  
   
   peer->open = TRUE; /* set open ASAP */
   
@@ -131,7 +129,6 @@ tcp_peer* tcp_peer_new(tcp_listener *listener)
   // for(i = 0; i < TCP_MAX_PEERS; i++)
   //   if(listener->peers[i].open) count += 1;
   // tcp_info("%d open connections", count);
-  
   
   peer->parent = listener;
   
@@ -142,11 +139,8 @@ tcp_peer* tcp_peer_new(tcp_listener *listener)
   }
   
   
-  // int r = fcntl(peer->fd, F_SETFL, O_NONBLOCK);
-  // if(r < 0) {
-  //   tcp_error("Setting nonblock mode on socket failed");
-  //   goto error;
-  // }  
+  int r = fcntl(peer->fd, F_SETFL, O_NONBLOCK);
+  assert(r >= 0);
   
   peer->read_watcher.data = peer;
   ev_init(&(peer->read_watcher), tcp_peer_on_readable);
@@ -212,10 +206,6 @@ tcp_listener* tcp_listener_new(struct ev_loop *loop)
   assert(r == 0);
   
   return listener;
-
-error:
-  tcp_listener_free(listener);
-  return NULL;
 }
 
 void tcp_listener_free(tcp_listener *listener)
@@ -276,7 +266,7 @@ void tcp_listener_accept( struct ev_loop *loop
   
   peer = tcp_peer_new(listener);
   
-  if(listener->accept_cb != NULL)
+  if(listener->accept_cb != NULL && peer)
     listener->accept_cb(peer, listener->accept_cb_data);
   
   return;
