@@ -9,7 +9,6 @@ LIBEV_LIBS   = -L$(LIBEV_PREFIX)/lib -lev
 
 ########################################################
 
-
 CC = gcc
 CFLAGS = $(GLIB_CFLAGS) $(LIBEV_CFLAGS)
 LIBS = $(LIBEV_LIBS) $(GLIB_LIBS)
@@ -22,7 +21,7 @@ TESTS = tcp_test ebb_test
 %.o : %.c Makefile
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
-all: $(TESTS) $(OBJS) mongrel_parser ruby_binding
+all: $(TESTS) $(OBJS) mongrel_parser
 
 %_test : $(OBJS) Makefile parser.o
 	$(CC) $(ALL_CFLAGS) $(OBJS) mongrel/parser.o $@.c -o $@ $(LIBS)
@@ -32,9 +31,6 @@ parser.o: mongrel_parser
 mongrel_parser:
 	make -C ./mongrel
 
-ruby_binding:
-	rake -f ruby_binding/Rakefile
-
 test: test_server test.rb
 	ruby test.rb
 
@@ -42,4 +38,3 @@ test: test_server test.rb
 clean:
 	rm -f $(OBJS) $(TESTS)
 	$(MAKE) -C ./mongrel clean
-	rake -f ruby_binding/Rakefile clean

@@ -25,17 +25,18 @@ module Ebb
     # XXX: push this code to C?
     def process_client(client)
       status, headers, body = @app.call(client.env)
-            
-      client.write("HTTP/1.1 %d %s\r\n" % [status, HTTP_STATUS_CODES[status]])
+      
+      out = "HTTP/1.1 %d %s\r\n" % [status, HTTP_STATUS_CODES[status]]
       
       if body.respond_to? :length and status != 304
-        client.write("Connection: close\r\n")
+        out += "Connection: close\r\n"
         headers['Content-Length'] = body.length
       end
       
-      headers.each { |k, v| client.write("#{k}: #{v}\r\n") }
-      client.write("\r\n")
-      body.each { |part| client.write(part) }
+      headers.each { |k, v| out += "#{k}: #{v}\r\n" }
+      out += "\r\n"
+      body.each { |part| out += part }
+      client.write out
     ensure
       body.close if body and body.respond_to? :close
       client.close

@@ -21,10 +21,10 @@ typedef struct ebb_client ebb_client;
 
 /*** Ebb Client ***/
 
-ebb_client* ebb_client_new(ebb_server *, tcp_peer *);
 void ebb_client_free(ebb_client*);
 void ebb_client_close(ebb_client*);
 int ebb_client_write(ebb_client*, const char *data, int length);
+#define ebb_client_closed_p(client) (client->socket->open == FALSE)
 #define ebb_client_add_env(client, field,flen,value,vlen) \
   client->env_fields[client->env_size] = field; \
   client->env_field_lengths[client->env_size] = flen; \

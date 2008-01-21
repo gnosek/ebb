@@ -27,13 +27,13 @@ void tcp_peer_stop_read_watcher(tcp_peer *peer);
 int tcp_peer_write(tcp_peer *peer, const char *data, int length)
 {
   if(!peer->open) {
-    //tcp_warning("Trying to write to a peer that isn't open.");
+    tcp_warning("Trying to write to a peer that isn't open.");
     return 0;
   }
   
-  int sent = send(peer->fd, data, length, 0);
+  int sent = send(peer->fd, data, length, MSG_HAVEMORE);
   if(sent < 0) {
-    tcp_warning("Error writing: %s", strerror(errno));
+    //tcp_warning("Error writing: %s", strerror(errno));
     tcp_peer_close(peer);
     return 0;
   }
@@ -196,14 +196,6 @@ tcp_listener* tcp_listener_new(struct ev_loop *loop)
   
   listener->loop = loop;
   listener->open = FALSE;
-  
-  /* Ignore SIGPIPE */
-  struct sigaction sigact;
-  sigact.sa_handler = SIG_IGN;
-  sigemptyset(&sigact.sa_mask);
-  sigact.sa_flags = 0;
-  r = sigaction(SIGPIPE, &sigact, 0);
-  assert(r == 0);
   
   return listener;
 }

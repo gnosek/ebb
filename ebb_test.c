@@ -1,7 +1,8 @@
-#include "ebb.h"
 #include <stdio.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include "ebb.h"
 
 const char *header = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\n";
 
@@ -27,6 +28,9 @@ int main(void)
 {
   struct ev_loop *loop = ev_default_loop(0);
   ebb_server *server = ebb_server_new(loop);
+  
+  /* Ignore SIGPIPE */
+  signal(SIGPIPE, SIG_IGN);
   
   fprintf(stdout, "Starting server at 0.0.0.0 4001\n");
   

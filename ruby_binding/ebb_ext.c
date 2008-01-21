@@ -59,7 +59,8 @@ VALUE server_process_connections(VALUE server)
   
   Data_Get_Struct(server, ebb_server, _server);
   /* FIXME: don't go inside internal datastructures */
-  ev_loop(_server->socket->loop, EVLOOP_NONBLOCK);
+  //ev_loop(_server->socket->loop, EVLOOP_NONBLOCK);
+  ev_loop(_server->socket->loop, EVLOOP_ONESHOT);
   
   
   /* FIXME: Need way to know when the loop is finished...

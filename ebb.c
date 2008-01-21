@@ -19,6 +19,7 @@
 #include "parser_callbacks.h"
 
 void* ebb_handle_request(void *_client);
+ebb_client* ebb_client_new(ebb_server *, tcp_peer *);
 
 ebb_server* ebb_server_new(struct ev_loop *loop)
 {
@@ -147,7 +148,6 @@ ebb_client* ebb_client_new(ebb_server *server, tcp_peer *socket)
 
 void ebb_client_close(ebb_client *client)
 {
-  assert(client->socket->open);
   tcp_peer_close(client->socket);
 }
 
