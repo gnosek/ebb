@@ -27,7 +27,7 @@ void tcp_peer_stop_read_watcher(tcp_peer *peer);
 int tcp_peer_write(tcp_peer *peer, const char *data, int length)
 {
   if(!peer->open) {
-    tcp_warning("Trying to write to a peer that isn't open.");
+    //tcp_warning("Trying to write to a peer that isn't open.");
     return 0;
   }
   
