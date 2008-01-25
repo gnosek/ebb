@@ -27,11 +27,9 @@ Ebb aims to be the smallest and fastest web server possible specifically for
 doing the processing for web frameworks like Rails. 
 
 It's less than 1000 lines of C code! 
-wc -l ebb.c ebb.h tcp.c tcp.h ruby_binding/ebb_ext.c
+wc -l ebb.c ebb.h parser_callbacks.h ruby_binding/ebb_ext.c
 
 = TODO, ordered
-* Statically allocate all request objects at compile-time in Ebb.
-  This will remove the responsibility of freeing the responses from the users.
 * TCP writer callback ?
 * Put client's address into env
 * Python binding

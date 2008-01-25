@@ -21,20 +21,22 @@ void request_cb(ebb_client *client, void *data)
   }
   
   ebb_client_write(client, "Hello.\r\n\r\n", 6);
-  ebb_client_free(client);
+  ebb_client_close(client);
 }
 
 int main(void)
 {
   struct ev_loop *loop = ev_default_loop(0);
-  ebb_server *server = ebb_server_new(loop);
+  ebb_server *server = ebb_server_alloc();
+  
+  ebb_server_init(server, loop, "localhost", 4001, request_cb, NULL);
   
   /* Ignore SIGPIPE */
   signal(SIGPIPE, SIG_IGN);
   
   fprintf(stdout, "Starting server at 0.0.0.0 4001\n");
   
-  ebb_server_start(server, "localhost", 4001, request_cb, NULL);
+  ebb_server_start(server);
   ev_loop(loop, 0);
   ebb_server_free(server);
   return 0; // success

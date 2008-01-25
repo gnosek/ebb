@@ -17,6 +17,7 @@ module Ebb
       @host = options[:Host] || '0.0.0.0'
       @port = (options[:Port] || 4001).to_i
       @app = app
+      init(@host, @port)
     end
     
     # Called by the C library on each request.
@@ -42,16 +43,11 @@ module Ebb
       client.close
     end
     
-    # TODO:
-    # problem here. this should be a nonblocking call that starts the server
-    # in a seperate thread. We don't want to sit in libev's loop and ignore
-    # all the ruby related things going on.
-    # Better to start a new thread (do i do this in ebb_ext.c?)
     def start
       trap('INT')  { puts "got INT"; stop }
       trap('TERM') { puts "got TERM"; stop }
       
-      start_listening
+      _start
       while process_connections
         unless @waiting_clients.empty?
           client = @waiting_clients.shift

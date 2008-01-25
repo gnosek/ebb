@@ -15,8 +15,8 @@ LIBS = $(LIBEV_LIBS) $(GLIB_LIBS)
 
 ALL_CFLAGS = -g -Wall $(CFLAGS)
 
-OBJS = tcp.o ebb.o
-TESTS = tcp_test ebb_test
+OBJS = ebb.o
+TESTS = ebb_test
 
 %.o : %.c Makefile
 	$(CC) $(ALL_CFLAGS) -c $< -o $@

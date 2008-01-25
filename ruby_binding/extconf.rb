@@ -10,7 +10,7 @@ unless  have_library('ev', 'ev_version_major') and have_header('ev.h') and
   exit 1
 end
 # Help.. what's the proper way to do this?
-$LOCAL_LIBS = '../ebb.o ../tcp.o ../mongrel/parser.o'
+$LOCAL_LIBS = '../ebb.o ../mongrel/parser.o'
 $CPPFLAGS += " -I.. -L.. "
 
 create_makefile("ebb_ext")
