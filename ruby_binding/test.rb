@@ -6,7 +6,7 @@ Debugger.start
 
 class SimpleApp
   def call(env)
-    [200, {:Content_Type => 'text/plain'}, "Hello"]
+    [200, {:Content_Type => 'text/plain'}, "Hello \r\n" * 500000]
   end
 end
 

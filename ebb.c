@@ -322,20 +322,24 @@ void ebb_client_close(ebb_client *client)
 }
 
 /* TODO replace this with callback write */
-ssize_t ebb_client_write(ebb_client *client, const char *data, int length)
+int ebb_client_write(ebb_client *client, const char *data, int length)
 {
+  int total_sent=0, sent;
   if(!client->open) {
-     //tcp_warning("Trying to write to a peer that isn't open.");
-     return 0;
-   }
+    //tcp_warning("Trying to write to a peer that isn't open.");
+    return 0;
+  }
    
-   ssize_t sent = send(client->fd, data, length, 0);
-   if(sent < 0) {
-     //tcp_warning("Error writing: %s", strerror(errno));
-     ebb_client_close(client);
-     return 0;
-   }
-   ev_timer_again(client->server->loop, &(client->timeout_watcher));
+  while(sent != length) {
+    sent = send(client->fd, data, length, 0);
+    if(sent < 0) {
+      //tcp_warning("Error writing: %s", strerror(errno));
+      ebb_client_close(client);
+      break;
+    }
+    ev_timer_again(client->server->loop, &(client->timeout_watcher));
+    total_sent += sent;
+ }
    
-   return sent;
+ return total_sent;
 }

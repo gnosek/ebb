@@ -41,8 +41,8 @@ module Ebb
       headers.each { |k, v| out += "#{k}: #{v}\r\n" }
       out += "\r\n"
       out += body.to_s
-      written = client.write out
-      raise "Didn't write total content! wrote #{written} but total was #{out.length}" if(written != out.length)
+      client.write out
+      #raise "Didn't write total content! wrote #{written} but total was #{out.length}" if(written != out.length)
     ensure
       body.close if body and body.respond_to? :close
       client.close

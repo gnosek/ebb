@@ -35,7 +35,7 @@ typedef struct ebb_client ebb_client;
 /*** Ebb Client ***/
 
 void ebb_client_close(ebb_client*);
-ssize_t ebb_client_write(ebb_client*, const char *data, int length);
+int ebb_client_write(ebb_client*, const char *data, int length);
 #define ebb_client_closed_p(client) (client->socket->open == FALSE)
 #define ebb_client_add_env(client, field,flen,value,vlen) \
   client->env_fields[client->env_size] = field; \
