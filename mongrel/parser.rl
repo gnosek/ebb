@@ -13,10 +13,8 @@
 #define MARK(M,FPC) (parser->M = (FPC) - buffer)
 #define PTR_TO(F) (buffer + parser->F)
 
-/** Machine **/
-
+/** machine **/
 %%{
-  
   machine http_parser;
 
   action mark {MARK(mark, fpc); }
@@ -29,39 +27,90 @@
 
   action start_value { MARK(mark, fpc); }
   action write_value { 
-    parser->http_field(parser->data, PTR_TO(field_start), parser->field_len, PTR_TO(mark), LEN(mark, fpc));
+    if(parser->http_field != NULL) {
+      parser->http_field(parser->data, PTR_TO(field_start), parser->field_len, PTR_TO(mark), LEN(mark, fpc));
+    }
   }
   action request_method { 
-    parser->request_method(parser->data, PTR_TO(mark), LEN(mark, fpc));
+    if(parser->request_method != NULL) 
+      parser->request_method(parser->data, PTR_TO(mark), LEN(mark, fpc));
   }
   action request_uri { 
-    parser->request_uri(parser->data, PTR_TO(mark), LEN(mark, fpc));
-  }
-  action fragment { 
-    parser->fragment(parser->data, PTR_TO(mark), LEN(mark, fpc));
+    if(parser->request_uri != NULL)
+      parser->request_uri(parser->data, PTR_TO(mark), LEN(mark, fpc));
   }
 
   action start_query {MARK(query_start, fpc); }
   action query_string { 
-    parser->query_string(parser->data, PTR_TO(query_start), LEN(query_start, fpc));
+    if(parser->query_string != NULL)
+      parser->query_string(parser->data, PTR_TO(query_start), LEN(query_start, fpc));
   }
 
   action http_version {	
-    parser->http_version(parser->data, PTR_TO(mark), LEN(mark, fpc));
+    if(parser->http_version != NULL)
+      parser->http_version(parser->data, PTR_TO(mark), LEN(mark, fpc));
   }
 
   action request_path {
-    parser->request_path(parser->data, PTR_TO(mark), LEN(mark,fpc));
+    if(parser->request_path != NULL)
+      parser->request_path(parser->data, PTR_TO(mark), LEN(mark,fpc));
   }
 
   action done { 
     parser->body_start = fpc - buffer + 1; 
-    parser->header_done(parser->data, fpc + 1, pe - fpc - 1);
+    if(parser->header_done != NULL)
+      parser->header_done(parser->data, fpc + 1, pe - fpc - 1);
     fbreak;
   }
 
-  include http_parser_common "common.rl";
 
+#### HTTP PROTOCOL GRAMMAR
+# line endings
+  CRLF = "\r\n";
+
+# character types
+  CTL = (cntrl | 127);
+  safe = ("$" | "-" | "_" | ".");
+  extra = ("!" | "*" | "'" | "(" | ")" | ",");
+  reserved = (";" | "/" | "?" | ":" | "@" | "&" | "=" | "+");
+  unsafe = (CTL | " " | "\"" | "#" | "%" | "<" | ">");
+  national = any -- (alpha | digit | reserved | extra | safe | unsafe);
+  unreserved = (alpha | digit | safe | extra | national);
+  escape = ("%" xdigit xdigit);
+  uchar = (unreserved | escape);
+  pchar = (uchar | ":" | "@" | "&" | "=" | "+");
+  tspecials = ("(" | ")" | "<" | ">" | "@" | "," | ";" | ":" | "\\" | "\"" | "/" | "[" | "]" | "?" | "=" | "{" | "}" | " " | "\t");
+
+# elements
+  token = (ascii -- (CTL | tspecials));
+
+# URI schemes and absolute paths
+  scheme = ( alpha | digit | "+" | "-" | "." )* ;
+  absolute_uri = (scheme ":" (uchar | reserved )*);
+
+  path = (pchar+ ( "/" pchar* )*) ;
+  query = ( uchar | reserved )* %query_string ;
+  param = ( pchar | "/" )* ;
+  params = (param ( ";" param )*) ;
+  rel_path = (path? %request_path (";" params)?) ("?" %start_query query)?;
+  absolute_path = ("/"+ rel_path);
+
+  Request_URI = ("*" | absolute_uri | absolute_path) >mark %request_uri;
+  Method = (upper | digit | safe){1,20} >mark %request_method;
+
+  http_number = (digit+ "." digit+) ;
+  HTTP_Version = ("HTTP/" http_number) >mark %http_version ;
+  Request_Line = (Method " " Request_URI " " HTTP_Version CRLF) ;
+
+  field_name = (token -- ":")+ >start_field %write_field;
+
+  field_value = any* >start_value %write_value;
+
+  message_header = field_name ":" " "* field_value :> CRLF;
+
+  Request = Request_Line (message_header)* ( CRLF @done);
+
+main := Request;
 }%%
 
 /** Data **/
@@ -110,7 +159,7 @@ size_t http_parser_execute(http_parser *parser, const char *buffer, size_t len, 
 
   if(parser->body_start) {
     /* final \r\n combo encountered so stop right here */
-    %% write eof;
+    %%write eof;
     parser->nread++;
   }
 

@@ -4,8 +4,6 @@ require '../ebb'
 require 'camping'
 require 'rack'
 require 'mongrel'
-require 'swiftcore/evented_mongrel' 
-require 'thin'
 
 Camping.goes :CampApp
 module CampApp
@@ -14,7 +12,7 @@ module CampApp
       def get
         @headers["X-Served-By"] = URI("http://rack.rubyforge.org")
         @headers["Content-Type"] = 'text/plain'
-        "Camping works! " * 5000
+        "Camping works! " * 500
       end
       def post
         "Data: #{input.foo}"
@@ -23,55 +21,6 @@ module CampApp
   end
 end
 
-class Array
-  def avg
-    sum.to_f / length
-  end
-  
-  def sum
-    inject(0) { |i, s| s += i }
-  end
-  
-  def rand_each(&block)
-    sort_by{ rand }.each &block
-  end
-end
-
-
-class ServerTest
-  attr_reader :name, :port, :app
-  def initialize(name, port, &start_block)
-    @name = name
-    @port = port
-    puts "Starting #{name}"
-    @pid = fork { start_block.call }
-    sleep 3
-  end
-  
-  def <=>(a)
-    @name <=> a.name
-  end
-  
-  def kill
-    Process.kill('KILL', @pid)
-  end
-  
-  def run_trial(concurrency)
-    print "#{@name} with concurrency #{concurrency}..."
-    $stdout.flush
-    r = %x{ab -q -c #{concurrency} -n 1000 http://0.0.0.0:#{@port}/ | grep "Requests per second" }
-    raise "couldn't match rps in #{r.inspect}" unless r =~ /Requests per second:\s*(\d+\.\d\d)/
-    rps = $1.to_f
-    puts rps
-    {
-      :test => 'camping1',
-      :server=> @name, 
-      :concurrency => concurrency, 
-      :rps => rps,
-      :time => Time.now
-    }
-  end
-end
 
 def all_tests(dump_file = "./benchmarks.ruby_dump")
   
@@ -85,25 +34,34 @@ def all_tests(dump_file = "./benchmarks.ruby_dump")
   servers = []
   
   servers << ServerTest.new('evented mongrel', 4001) do
+    require 'swiftcore/evented_mongrel'
     ENV['EVENT'] = "1"
     Rack::Handler::Mongrel.run(app, :Port => 4001)
   end
   
   servers << ServerTest.new('ebb', 4002) do
+    require '../ebb'
     server = Ebb::Server.new(app, :Port => 4002)
     server.start
   end
   
-  servers << ServerTest.new('thin', 4003) do
-    Rack::Handler::Thin.run(app, :Port => 4003)
+  servers << ServerTest.new('mongrel', 4003) do
+    require 'mongrel'
+    Rack::Handler::Mongrel.run(app, :Port => 4003)
+  end
+  
+  servers << ServerTest.new('thin', 4004) do
+    require 'thin'
+    Rack::Handler::Thin.run(app, :Port => 4004)
   end
   
   
-  ([1, 10, 19, 28, 37, 46, 55, 64, 73, 82, 91, 100]*3).rand_each do |concurrency|
+  ([3, 6, 9, 12, 15]*3).rand_each do |concurrency|
     servers.rand_each do |server| 
       $results << server.run_trial(concurrency)
       sleep 0.5 # give the other process some time to cool down?
     end
+    puts "---"
   end
   
 ensure

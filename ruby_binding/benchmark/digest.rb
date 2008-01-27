@@ -1,6 +1,7 @@
 # supply the benchmark dump file as an argumetn to this program
 require 'rubygems'
 require 'google_chart'
+require 'server_test'
 
 class Array
   def avg
@@ -11,26 +12,15 @@ class Array
   end
 end
 
-colors = [
-  '99dddd',
-  'dd99dd',
-  'dddd99'
-].sort_by { rand }
+colors = %w{F74343 444130 7DA478 E4AC3D}.sort_by { rand }
 
-results = Marshal.load(File.read(ARGV[0]))
+results = ServerTestResults.open(ARGV[0])
+all_m = []
+chart = GoogleChart::LineChart.new('400x300', [Time.now.strftime('%Y.%m.%d'), "requests per second", "#{results.length} data points"].join(','), true)
+results.servers.each do |server|
 
-chart = GoogleChart::LineChart.new('500x300', [Time.now.strftime('%Y.%m.%d'), "requests per second", "#{results.length} data points"].join(','), true)
-servers = results.map {|r| r[:server] }.uniq
-servers.each do |server|
-  server_data = results.find_all { |r| r[:server] == server }
-  concurrencies = server_data.map { |d| d[:concurrency] }.uniq
-  data = []
-  concurrencies.each do |c|
-    measurements = server_data.find_all { |d| d[:concurrency] == c }.map { |d| d[:rps] }
-    data << [c, measurements.avg]
-  end
-  chart.data(server, data.sort, colors.shift)
+  chart.data(server, results.data(server, :size).sort, colors.shift)
 end
-chart.axis(:x, :range => [0,100])
-chart.axis(:x, :labels => ['concurrency'], :positions => [50])
+#chart.axis(:x, :range => [0,100])
+chart.axis(:x, :labels => ['kb'], :positions => [50])
 puts chart.to_url

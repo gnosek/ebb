@@ -5,6 +5,10 @@ $: << File.expand_path(File.dirname(__FILE__))
 require 'ebb_ext'
 
 module Ebb
+  class Client
+    attr_reader :env
+  end
+  
   class Server
     def self.run(app, options={})
       # port must be an integer
@@ -36,8 +40,9 @@ module Ebb
       
       headers.each { |k, v| out += "#{k}: #{v}\r\n" }
       out += "\r\n"
-      body.each { |part| out += part }
-      client.write out
+      out += body.to_s
+      written = client.write out
+      raise "Didn't write total content! wrote #{written} but total was #{out.length}" if(written != out.length)
     ensure
       body.close if body and body.respond_to? :close
       client.close
