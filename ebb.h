@@ -34,9 +34,16 @@ typedef struct ebb_client ebb_client;
 
 /*** Ebb Client ***/
 
+typedef void (*ebb_after_write_cb)(ebb_client*, void *data);
+
 void ebb_client_close(ebb_client*);
 int ebb_client_write(ebb_client*, const char *data, int length);
-#define ebb_client_closed_p(client) (client->socket->open == FALSE)
+void ebb_client_evented_write( ebb_client*
+                             , const char *data
+                             , int length
+                             , ebb_after_write_cb
+                             , void *cb_data
+                             );
 #define ebb_client_add_env(client, field,flen,value,vlen) \
   client->env_fields[client->env_size] = field; \
   client->env_field_lengths[client->env_size] = flen; \
@@ -70,6 +77,13 @@ struct ebb_client {
   char read_buffer[EBB_CHUNKSIZE];
   ssize_t read;
   ev_io read_watcher;
+  
+  ev_io write_watcher;
+  const char *write_buffer;
+  ssize_t write_buffer_len;
+  ssize_t written;
+  void *write_cb_data;
+  ebb_after_write_cb after_write_cb;
   
   ev_timer timeout_watcher;
   
@@ -111,22 +125,5 @@ struct ebb_server {
   
   ebb_client clients[EBB_MAX_CLIENTS];
 };
-
-
-//const char *ebb_const_ebb_url_scheme = "ebb.url_scheme";
-// DEF_GLOBAL(content_length, "CONTENT_LENGTH");
-// DEF_GLOBAL(http_content_length, "HTTP_CONTENT_LENGTH");
-// DEF_GLOBAL(content_type, "CONTENT_TYPE");
-// DEF_GLOBAL(http_content_type, "HTTP_CONTENT_TYPE");
-// DEF_GLOBAL(gateway_interface, "GATEWAY_INTERFACE");
-// DEF_GLOBAL(gateway_interface_value, "CGI/1.2");
-// DEF_GLOBAL(server_protocol, "SERVER_PROTOCOL");
-// DEF_GLOBAL(server_protocol_value, "HTTP/1.1");
-// DEF_GLOBAL(http_host, "HTTP_HOST");
-// DEF_GLOBAL(port_80, "80");
-// DEF_GLOBAL(url_scheme, "rack.url_scheme");
-// DEF_GLOBAL(url_scheme_value, "http");
-// DEF_GLOBAL(script_name, "SCRIPT_NAME");
-// DEF_GLOBAL(path_info, "PATH_INFO");
 
 #endif ebb_h

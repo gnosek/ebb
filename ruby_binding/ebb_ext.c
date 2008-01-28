@@ -20,6 +20,8 @@ static VALUE global_http_version;
 static VALUE global_request_body;
 static VALUE global_server_name;
 static VALUE global_server_port;
+static VALUE global_path_info;
+
 
 /* Variables with an underscore are C-level variables */
 
@@ -60,14 +62,19 @@ VALUE client_env(VALUE client)
                      , env_value(_client->env_values[i], _client->env_value_lengths[i])
                      );
   }
+  
+  rb_hash_aset(hash, global_path_info, rb_hash_aref(hash, global_request_path));
+  
   return hash;
 }
 
 VALUE client_new(ebb_client *_client)
 {
-  VALUE client = Data_Wrap_Struct(cClient, 0, ebb_client_close, _client);
+  //VALUE client = Data_Wrap_Struct(cClient, 0, ebb_client_close, _client);
+  VALUE client = Data_Wrap_Struct(cClient, 0, 0, _client);
   
   rb_iv_set(client, "@env", client_env(client));
+  rb_iv_set(client, "@write_buffer", rb_ary_new());
   return client;
 }
 
@@ -143,6 +150,44 @@ VALUE client_write(VALUE client, VALUE string)
   return INT2FIX(written);
 }
 
+void evented_write_done_cb(ebb_client *_client, void *data)
+{
+  VALUE client = (VALUE)data;
+  VALUE buffer, string;
+  
+  buffer = rb_iv_get(client, "@write_buffer");
+  rb_ary_shift(buffer);
+  if(RARRAY_LEN(buffer) ==  0) {
+    ebb_client_close(_client);
+  } else {
+    string = rb_ary_entry(buffer, 0);
+    ebb_client_evented_write( _client
+                            , RSTRING_PTR(string)
+                            , RSTRING_LEN(string)
+                            , evented_write_done_cb
+                            , (void*)client
+                            );
+  }
+}
+
+VALUE client_evwrite(VALUE client, VALUE string)
+{
+  ebb_client *_client;
+  VALUE buffer;
+  
+  buffer = rb_iv_get(client, "@write_buffer");
+  rb_ary_push(buffer, string);
+  if(RARRAY_LEN(buffer) == 1) {
+    Data_Get_Struct(client, ebb_client, _client);
+    ebb_client_evented_write( _client
+                            , RSTRING_PTR(string)
+                            , RSTRING_LEN(string)
+                            , evented_write_done_cb
+                            , (void*)client
+                            );
+  }
+}
+
 VALUE client_close(VALUE client)
 {
   ebb_client *_client;
@@ -169,6 +214,7 @@ void Init_ebb_ext()
   DEF_GLOBAL(request_body, "REQUEST_BODY");
   DEF_GLOBAL(server_name, "SERVER_NAME");
   DEF_GLOBAL(server_port, "SERVER_PORT");
+  DEF_GLOBAL(path_info, "PATH_INFO");
   
   rb_define_alloc_func(cServer, server_alloc);
   rb_define_method(cServer, "init", server_init, 2);
@@ -177,5 +223,6 @@ void Init_ebb_ext()
   rb_define_method(cServer, "stop", server_stop, 0);
   
   rb_define_method(cClient, "write", client_write, 1);
+  rb_define_method(cClient, "evwrite", client_evwrite, 1);
   rb_define_method(cClient, "close", client_close, 0);
 }

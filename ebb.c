@@ -132,7 +132,7 @@ void ebb_on_request( struct ev_loop *loop
   assert(server->request_watcher == watcher);
   
   if(EV_ERROR & revents) {
-    ebb_warning("ebb_on_request() got error event, closing server.");
+    ebb_info("ebb_on_request() got error event, closing server.");
     ebb_server_stop(server);
     return;
   }
@@ -307,6 +307,7 @@ void ebb_client_close(ebb_client *client)
 {
   if(client->open) {
     ev_io_stop(client->server->loop, &(client->read_watcher));
+    ev_io_stop(client->server->loop, &(client->write_watcher));
     ev_timer_stop(client->server->loop, &(client->timeout_watcher));
     
     /* http_parser */
@@ -330,16 +331,76 @@ int ebb_client_write(ebb_client *client, const char *data, int length)
     return 0;
   }
    
-  while(sent != length) {
-    sent = send(client->fd, data, length, 0);
+  while(total_sent < length) {
+    sent = send( client->fd
+               , data + sizeof(char)*total_sent
+               , length - total_sent
+               , 0
+               );
     if(sent < 0) {
-      //tcp_warning("Error writing: %s", strerror(errno));
+      //ebb_warning("Error writing: %s", strerror(errno));
       ebb_client_close(client);
       break;
     }
-    ev_timer_again(client->server->loop, &(client->timeout_watcher));
     total_sent += sent;
- }
-   
- return total_sent;
+    ev_timer_again(client->server->loop, &(client->timeout_watcher));
+  }
+  return total_sent;
 }
+
+void ebb_on_writable( struct ev_loop *loop
+                    , ev_io *watcher
+                    , int revents
+                    )
+{
+  ebb_client *client = (ebb_client*)(watcher->data);
+  ssize_t sent;
+  
+  if(client->written != 0)
+    ebb_info("total written: %d", (int)(client->written));
+  
+  sent = send( client->fd
+             , client->write_buffer + sizeof(char)*(client->written)
+             , client->write_buffer_len - client->written
+             , 0
+             );
+  if(sent < 0) {
+    // ebb_warning("Error writing: %s", strerror(errno));
+    goto stop_writer;
+  }
+  client->written += sent;
+  
+  //ebb_info("wrote %d bytes. total: %d", (int)sent, (int)(client->written));
+  
+  ev_timer_again(loop, &(client->timeout_watcher));
+  
+  if(client->written == client->write_buffer_len) {
+    goto stop_writer;
+  }
+  return;
+stop_writer:
+  ev_io_stop(loop, watcher);
+  client->after_write_cb(client, client->write_cb_data);
+}
+
+void ebb_client_evented_write( ebb_client *client
+                             , const char *data
+                             , int length
+                             , ebb_after_write_cb after_write_cb
+                             , void *write_cb_data
+                             )
+{
+  assert(client->open);
+  assert(FALSE == ev_is_active(&(client->write_watcher)));
+  
+  client->write_buffer = data;
+  client->write_buffer_len = length;
+  client->written = 0;
+  client->write_cb_data = write_cb_data;
+  client->after_write_cb = after_write_cb;
+  client->write_watcher.data = client;
+  ev_init (&(client->write_watcher), ebb_on_writable);
+  ev_io_set (&(client->write_watcher), client->fd, EV_WRITE | EV_ERROR);
+  ev_io_start (client->server->loop, &(client->write_watcher));
+}
+

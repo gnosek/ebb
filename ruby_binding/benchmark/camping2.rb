@@ -13,7 +13,7 @@ begin
   results = ServerTestResults.open('./results.dump')
   $servers.each { |s| s.start }
   sleep 3
-  [1,10,20,30,50].map { |i| i.kilobytes }.rand_each do |size|
+  [1,5,10,20,30,50,100,200].map { |i| i.kilobytes }.rand_each do |size|
     $servers.rand_each do |server| 
       if r = server.trial(:size => size)
         results << r
@@ -31,18 +31,3 @@ ensure
   $servers.each { |server| server.kill }  
   results.write('./results.dump')
 end
-
-all_tests
-
-# when 'ebb'
-#   puts "ebb"
-#   server = Ebb::Server.new(app, :Port => 4001)
-#   server.start
-# # when 'm'
-# #   puts "mongrel"
-# #   Rack::Handler::Mongrel.run(app, :Port => 4002)
-# when 'mongrel'
-# 
-# else
-#   puts "unknown arg"
-# end

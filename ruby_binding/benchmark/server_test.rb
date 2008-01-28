@@ -5,14 +5,14 @@ require 'rack'
 Camping.goes :CampApp
 module CampApp
   module Controllers
-    class HW < R '/(\d+)'
-      def get(size)
+    class Index < R '/','/(\d+)'
+      @@responses = {}
+      def get(size=1)
         @headers["Content-Type"] = 'text/plain'
         size = size.to_i
         raise "size is #{size}" if size <= 0
-        "C" * size
+        @@responses[size] ||= "C" * size
       end
-      
     end
   end
 end
@@ -160,19 +160,27 @@ class ServerTest
   def trial(options = {})
     concurrency = options[:concurrency] || 50
     size = options[:size] || 500
+    requests = options[:requests] || 500
     
     print "#{@name} with  (c=#{concurrency},s=#{number_to_human_size(size)})..."
     $stdout.flush
-    r = %x{ab -q -c #{concurrency} -n 1000 http://0.0.0.0:#{@port}/#{size} | grep "Requests per second" }
+    r = %x{ab -q -c #{concurrency} -n #{requests} http://0.0.0.0:#{@port}/#{size}}
+    # Complete requests:      1000
+
     return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
     rps = $1.to_f
-    puts rps
+    if r =~ /Complete requests:\s*(\d+)/
+      completed_requests = $1.to_i
+    end
+    puts "#{rps} req/sec (#{completed_requests} completed)"
     {
       :test => 'camping1',
       :server=> @name, 
       :concurrency => concurrency, 
       :size => size,
       :rps => rps,
+      :requests => requests,
+      :requests_completed => completed_requests,
       :time => Time.now
     }
   end
@@ -198,7 +206,7 @@ end
 #  require 'mongrel'
 #  Rack::Handler::Mongrel.run(app, :Port => 4003)
 #end
-
+ 
 $servers << ServerTest.new('thin', 4004) do
   require 'thin'
   Rack::Handler::Thin.run(app, :Port => 4004)

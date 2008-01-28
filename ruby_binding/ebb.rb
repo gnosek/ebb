@@ -6,7 +6,7 @@ require 'ebb_ext'
 
 module Ebb
   class Client
-    attr_reader :env
+    attr_reader :env, :write_buffer
   end
   
   class Server
@@ -40,18 +40,15 @@ module Ebb
       
       headers.each { |k, v| out += "#{k}: #{v}\r\n" }
       out += "\r\n"
-      out += body.to_s
-      client.write out
-      #raise "Didn't write total content! wrote #{written} but total was #{out.length}" if(written != out.length)
+      body.each { |part|  out << part }
+      written = client.evwrite out
     ensure
       body.close if body and body.respond_to? :close
-      client.close
     end
     
     def start
       trap('INT')  { puts "got INT"; stop }
       trap('TERM') { puts "got TERM"; stop }
-      
       _start
       while process_connections
         unless @waiting_clients.empty?
