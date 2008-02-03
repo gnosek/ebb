@@ -23,6 +23,7 @@
 #include "ebb.h"
 #include "parser_callbacks.h"
 
+
 void ebb_dispatch(ebb_client *client)
 {
   ebb_server *server = client->server;
@@ -38,7 +39,6 @@ void ebb_dispatch(ebb_client *client)
                                  , server->port
                                  , strlen(server->port)
                                  );
-  
   server->request_cb(client, server->request_cb_data);
 }
 
@@ -53,7 +53,9 @@ void ebb_on_timeout( struct ev_loop *loop
   assert(&(client->timeout_watcher) == watcher);
   
   ebb_client_close(client);
+#ifdef DEBUG
   ebb_info("peer timed out");
+#endif
 }
 
 void ebb_on_readable( struct ev_loop *loop
@@ -80,7 +82,8 @@ void ebb_on_readable( struct ev_loop *loop
                      , 0
                      );
   if(read == 0) {
-    ebb_client_close(client); /* XXX is this the right action to take? */
+    //ebb_warning("read zero from client?");
+    //ebb_client_close(client); /* XXX is this the right action to take? */
     return;
   } else if(read < 0) {
     if(errno == EBADF || errno == ECONNRESET)
@@ -99,7 +102,7 @@ void ebb_on_readable( struct ev_loop *loop
     // TODO: File upload use the GString buffer
     //g_string_append_len(client->buffer, client->read_buffer, read);
     assert(FALSE);
-  } 
+  }
   
   // make ragel happy and put a nul character at the end of the stream
   // we will write over this in the next iteration
@@ -111,13 +114,57 @@ void ebb_on_readable( struct ev_loop *loop
                      , client->parser.nread
                      );
   if(http_parser_is_finished(&(client->parser))) {
+    client->input_head = client->read_buffer + client->parser.nread;
+    client->input_head_len = client->read - client->parser.nread;
+    client->input_read = 0;
+    
     ev_io_stop(loop, watcher);
+    
     ebb_dispatch(client);
   }
   
   return;
 error:
   ebb_client_close(client);
+}
+
+#define min(a,b) (((a) < (b)) ? (a) : (b))
+GString* ebb_client_read_input(ebb_client *client, ssize_t to_read)
+{
+  GString *string = g_string_sized_new(to_read);
+  
+  assert(to_read >= 0);
+  assert(client->open);
+  assert(client->server->open);
+  assert(http_parser_is_finished(&(client->parser)));
+  
+  ssize_t to_read_from_head = min(to_read, client->input_head_len - client->input_read);
+  ssize_t to_read_from_socket = min(0, to_read - to_read_from_head);
+  
+  assert(to_read_from_head >= 0);
+  assert(to_read_from_socket >= 0);
+  assert(to_read_from_head <= client->input_head_len);
+  assert(to_read_from_head + to_read_from_socket == to_read);
+  
+  g_string_append_len( string
+                     , client->input_head + client->input_read
+                     , to_read_from_head
+                     );
+  client->input_read += to_read_from_head;
+  
+  ssize_t read_from_socket = recv( client->fd
+                                 , string->str
+                                 , to_read_from_socket
+                                 , 0
+                                 );
+  if(read_from_socket < 0) {
+    ebb_error("Problem reading from socket: %s", strerror(errno));
+  } else {
+    string->len += read_from_socket;
+    client->input_read += read_from_socket;
+  }
+  
+  return string;
 }
 
 void ebb_on_request( struct ev_loop *loop
@@ -157,19 +204,17 @@ void ebb_on_request( struct ev_loop *loop
   }
   client->open = TRUE;
   
-  /* DEBUG
+#ifdef DEBUG
   int count = 0;
   for(i = 0; i < EBB_MAX_CLIENTS; i++)
     if(server->clients[i].open) count += 1;
-  tcp_info("%d open connections", count);
-  */
+  ebb_debug("%d open connections", count);
+#endif
   
   /* DO SOCKET STUFF */
   socklen_t len;
   client->fd = accept(server->fd, (struct sockaddr*)&(server->sockaddr), &len);
   assert(client->fd >= 0);
-  // int r = fcntl(client->fd, F_SETFL, O_NONBLOCK);
-  // assert(r >= 0);
   
   /* INITIALIZE inline http_parser */
   http_parser_init(&(client->parser));
@@ -187,6 +232,7 @@ void ebb_on_request( struct ev_loop *loop
   client->env_size = 0;
   client->read = 0;
   client->server = server;
+  client->write_buffer->len = 0; // see note in ebb_client_close
   
   /* SETUP READ AND TIMEOUT WATCHERS */
   client->read_watcher.data = client;
@@ -217,6 +263,11 @@ void ebb_server_init( ebb_server *server
   int r;
   // r = fcntl(server->fd, F_SETFL, O_NONBLOCK);
   // assert(r >= 0);
+  
+  int i;
+  for(i=0; i < EBB_MAX_CLIENTS; i++)
+    server->clients[i].write_buffer = g_string_new("");
+  
   int flags = 1;
   r = setsockopt(server->fd, SOL_SOCKET, SO_REUSEADDR, &flags, sizeof(flags));
   assert(r >= 0);
@@ -249,6 +300,10 @@ error:
 void ebb_server_free(ebb_server *server)
 {
   ebb_server_stop(server);
+  
+  int i; 
+  for(i=0; i < EBB_MAX_CLIENTS; i++)
+    g_string_free(server->clients[i].write_buffer, TRUE);
   if(server->port)
     free(server->port);
   if(server->address)
@@ -260,7 +315,7 @@ void ebb_server_free(ebb_server *server)
 
 void ebb_server_stop(ebb_server *server)
 {
-  g_debug("stopping ebb server\n");
+  ebb_info("Stopping ebb server");
   assert(server->open);
   
   int i;
@@ -313,39 +368,17 @@ void ebb_client_close(ebb_client *client)
     /* http_parser */
     http_parser_finish(&(client->parser));
     
-    // /* buffer */
-    // if(client->upload_buffer)
-    //   g_string_free(client->upload_buffer, TRUE);
+    /* buffer */
+    /* the theory here is that we do not free the already allocated 
+     * strings that we're holding the response in. we reuse it again - 
+     * presumably because the backend is going to keep sending such long
+     * requests.
+     */
+    client->write_buffer->len = 0;
     
     close(client->fd);
     client->open = FALSE;
   }
-}
-
-/* TODO replace this with callback write */
-int ebb_client_write(ebb_client *client, const char *data, int length)
-{
-  int total_sent=0, sent;
-  if(!client->open) {
-    //tcp_warning("Trying to write to a peer that isn't open.");
-    return 0;
-  }
-   
-  while(total_sent < length) {
-    sent = send( client->fd
-               , data + sizeof(char)*total_sent
-               , length - total_sent
-               , 0
-               );
-    if(sent < 0) {
-      //ebb_warning("Error writing: %s", strerror(errno));
-      ebb_client_close(client);
-      break;
-    }
-    total_sent += sent;
-    ev_timer_again(client->server->loop, &(client->timeout_watcher));
-  }
-  return total_sent;
 }
 
 void ebb_on_writable( struct ev_loop *loop
@@ -356,51 +389,59 @@ void ebb_on_writable( struct ev_loop *loop
   ebb_client *client = (ebb_client*)(watcher->data);
   ssize_t sent;
   
-  if(client->written != 0)
-    ebb_info("total written: %d", (int)(client->written));
+  if(EV_ERROR & revents) {
+    ebb_error("ebb_on_readable() got error event, closing peer");
+    return;
+  }
+  
+  //if(client->written != 0)
+  //  ebb_debug("total written: %d", (int)(client->written));
   
   sent = send( client->fd
-             , client->write_buffer + sizeof(char)*(client->written)
-             , client->write_buffer_len - client->written
+             , client->write_buffer->str + sizeof(gchar)*(client->written)
+             , client->write_buffer->len - client->written
              , 0
              );
   if(sent < 0) {
-    // ebb_warning("Error writing: %s", strerror(errno));
-    goto stop_writer;
+#ifdef DEBUG
+    ebb_warning("Error writing: %s", strerror(errno));
+#endif
+    // ebb_client_close(client);
+    return;
   }
   client->written += sent;
   
+  assert(client->written <= client->write_buffer->len);
   //ebb_info("wrote %d bytes. total: %d", (int)sent, (int)(client->written));
   
   ev_timer_again(loop, &(client->timeout_watcher));
   
-  if(client->written == client->write_buffer_len) {
-    goto stop_writer;
+  if(client->written == client->write_buffer->len) {
+    if(client->after_write_cb) client->after_write_cb(client);
+    ebb_client_close(client);
   }
-  return;
-stop_writer:
-  ev_io_stop(loop, watcher);
-  client->after_write_cb(client, client->write_cb_data);
 }
 
-void ebb_client_evented_write( ebb_client *client
-                             , const char *data
-                             , int length
-                             , ebb_after_write_cb after_write_cb
-                             , void *write_cb_data
+void ebb_client_write(ebb_client *client, const char *data, int length)
+{
+  g_string_append_len(client->write_buffer, data, length);
+}
+
+void ebb_client_start_writing( ebb_client *client
+                             , ebb_client_cb after_write_cb
                              )
 {
   assert(client->open);
   assert(FALSE == ev_is_active(&(client->write_watcher)));
   
-  client->write_buffer = data;
-  client->write_buffer_len = length;
+  /* We want the reads to be blocking but the writes to block */
+  int r = fcntl(client->fd, F_SETFL, O_NONBLOCK);
+  assert(r >= 0);
+  
   client->written = 0;
-  client->write_cb_data = write_cb_data;
   client->after_write_cb = after_write_cb;
   client->write_watcher.data = client;
   ev_init (&(client->write_watcher), ebb_on_writable);
   ev_io_set (&(client->write_watcher), client->fd, EV_WRITE | EV_ERROR);
-  ev_io_start (client->server->loop, &(client->write_watcher));
+  ev_io_start(client->server->loop, &(client->write_watcher));
 }
-

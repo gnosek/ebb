@@ -70,8 +70,9 @@ VALUE client_env(VALUE client)
 
 VALUE client_new(ebb_client *_client)
 {
-  //VALUE client = Data_Wrap_Struct(cClient, 0, ebb_client_close, _client);
   VALUE client = Data_Wrap_Struct(cClient, 0, 0, _client);
+  
+  _client->data = (void*)client;
   
   rb_iv_set(client, "@env", client_env(client));
   rb_iv_set(client, "@write_buffer", rb_ary_new());
@@ -146,46 +147,17 @@ VALUE client_write(VALUE client, VALUE string)
   int written;
   
   Data_Get_Struct(client, ebb_client, _client);
-  written = ebb_client_write(_client, RSTRING_PTR(string), RSTRING_LEN(string));
-  return INT2FIX(written);
+  ebb_client_write(_client, RSTRING_PTR(string), RSTRING_LEN(string));
+  return Qnil;
 }
 
-void evented_write_done_cb(ebb_client *_client, void *data)
-{
-  VALUE client = (VALUE)data;
-  VALUE buffer, string;
-  
-  buffer = rb_iv_get(client, "@write_buffer");
-  rb_ary_shift(buffer);
-  if(RARRAY_LEN(buffer) ==  0) {
-    ebb_client_close(_client);
-  } else {
-    string = rb_ary_entry(buffer, 0);
-    ebb_client_evented_write( _client
-                            , RSTRING_PTR(string)
-                            , RSTRING_LEN(string)
-                            , evented_write_done_cb
-                            , (void*)client
-                            );
-  }
-}
-
-VALUE client_evwrite(VALUE client, VALUE string)
+VALUE client_start_writing(VALUE client)
 {
   ebb_client *_client;
-  VALUE buffer;
   
-  buffer = rb_iv_get(client, "@write_buffer");
-  rb_ary_push(buffer, string);
-  if(RARRAY_LEN(buffer) == 1) {
-    Data_Get_Struct(client, ebb_client, _client);
-    ebb_client_evented_write( _client
-                            , RSTRING_PTR(string)
-                            , RSTRING_LEN(string)
-                            , evented_write_done_cb
-                            , (void*)client
-                            );
-  }
+  Data_Get_Struct(client, ebb_client, _client);
+  ebb_client_start_writing(_client, NULL);
+  return Qnil;
 }
 
 VALUE client_close(VALUE client)
@@ -195,6 +167,21 @@ VALUE client_close(VALUE client)
   Data_Get_Struct(client, ebb_client, _client);
   ebb_client_close(_client);
   return Qnil;
+}
+
+VALUE client_read_input(VALUE client, VALUE size)
+{
+  ebb_client *_client;
+  GString *_string;
+  VALUE string;
+  
+  Data_Get_Struct(client, ebb_client, _client);
+  _string = ebb_client_read_input(_client, FIX2INT(size));
+  
+  string = _string->len == 0 ? Qnil : rb_str_new(_string->str, _string->len);
+  g_string_free(_string, TRUE);
+  
+  return string;
 }
 
 
@@ -223,6 +210,6 @@ void Init_ebb_ext()
   rb_define_method(cServer, "stop", server_stop, 0);
   
   rb_define_method(cClient, "write", client_write, 1);
-  rb_define_method(cClient, "evwrite", client_evwrite, 1);
-  rb_define_method(cClient, "close", client_close, 0);
+  rb_define_method(cClient, "start_writing", client_start_writing, 0);
+  rb_define_method(cClient, "read_input", client_read_input, 1);
 }

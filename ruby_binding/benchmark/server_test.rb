@@ -1,3 +1,5 @@
+$: << File.expand_path(File.dirname(__FILE__) + '/..')
+
 require 'rubygems'
 require 'camping'
 require 'rack'
@@ -197,7 +199,7 @@ $servers << ServerTest.new('evented mongrel', 4001) do
 end
 
 $servers << ServerTest.new('ebb', 4002) do
-  require '../ebb'
+  require 'ebb'
   server = Ebb::Server.new(app, :Port => 4002)
   server.start
 end

@@ -6,7 +6,31 @@ require 'ebb_ext'
 
 module Ebb
   class Client
-    attr_reader :env, :write_buffer
+    attr_reader :env
+    
+    def env
+      @env.update(
+        'rack.input' => Input.new(self)
+      )
+    end
+  end
+  
+  class Input
+    def initialize(client)
+      @client = client
+    end
+    
+    def read(len = 1)
+      @client.read_input(len)
+    end
+    
+    def gets
+      raise NotImplementedError
+    end
+    
+    def each
+      raise NotImplementedError
+    end
   end
   
   class Server
@@ -27,33 +51,43 @@ module Ebb
     # Called by the C library on each request.
     # env is a hash containing all the variables of the request
     # client is a TCPSocket
-    # XXX: push this code to C?
     def process_client(client)
       status, headers, body = @app.call(client.env)
       
-      out = "HTTP/1.1 %d %s\r\n" % [status, HTTP_STATUS_CODES[status]]
+      client.write "HTTP/1.1 %d %s\r\n" % [status, HTTP_STATUS_CODES[status]]
       
       if body.respond_to? :length and status != 304
-        out += "Connection: close\r\n"
+        client.write "Connection: close\r\n"
         headers['Content-Length'] = body.length
       end
       
-      headers.each { |k, v| out += "#{k}: #{v}\r\n" }
-      out += "\r\n"
-      body.each { |part|  out << part }
-      written = client.evwrite out
-    ensure
-      body.close if body and body.respond_to? :close
+      headers.each { |k, v| client.write "#{k}: #{v}\r\n" }
+      client.write "\r\n"
+      if body.kind_of?(String)
+        client.write body
+      elsif body.kind_of?(StringIO)
+        client.write body.string
+      else
+        # Not many apps use this yet so i'll hold off on streaming
+        # responses until the rest of ebb is more developed
+        # Yes, I know streaming responses are very cool.
+        raise NotImplementedError, "Unsupported body of type #{body.class}"
+      end
     end
     
     def start
       trap('INT')  { puts "got INT"; stop }
       trap('TERM') { puts "got TERM"; stop }
       _start
+      
       while process_connections
         unless @waiting_clients.empty?
+          if $debug
+            puts "#{@waiting_clients.length} waiting clients" if @waiting_clients.length > 1
+          end
           client = @waiting_clients.shift
           process_client(client)
+          client.start_writing
         end
       end
     end

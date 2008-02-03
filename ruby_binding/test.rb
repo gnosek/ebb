@@ -14,7 +14,7 @@ module CampApp
         @headers["Content-Type"] = 'text/plain'
         size = size.to_i
         raise "size is #{size}" if size <= 0
-        "C" * size
+        "C" * size + "\r\n\r\n"
       end
     end
   end

@@ -22,6 +22,8 @@ typedef struct ebb_client ebb_client;
   g_log(EBB_LOG_DOMAIN, G_LOG_LEVEL_WARNING, str, ## __VA_ARGS__);
 #define ebb_info(str, ...)  \
   g_log(EBB_LOG_DOMAIN, G_LOG_LEVEL_INFO, str, ## __VA_ARGS__);
+#define ebb_debug(str, ...)  \
+  g_log(EBB_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, str, ## __VA_ARGS__);
 
 #define EBB_CHUNKSIZE (16*1024)
 #define EBB_MAX_CLIENTS 950
@@ -34,16 +36,15 @@ typedef struct ebb_client ebb_client;
 
 /*** Ebb Client ***/
 
-typedef void (*ebb_after_write_cb)(ebb_client*, void *data);
+typedef void (*ebb_client_cb)(ebb_client*);
 
 void ebb_client_close(ebb_client*);
-int ebb_client_write(ebb_client*, const char *data, int length);
-void ebb_client_evented_write( ebb_client*
-                             , const char *data
-                             , int length
-                             , ebb_after_write_cb
-                             , void *cb_data
+void ebb_client_write(ebb_client*, const char *data, int length);
+void ebb_client_start_writing( ebb_client *client
+                             , ebb_client_cb after_write_cb
                              );
+/* User must free the GString returned from ebb_client_read_input */
+GString* ebb_client_read_input(ebb_client *client, ssize_t size);
 #define ebb_client_add_env(client, field,flen,value,vlen) \
   client->env_fields[client->env_size] = field; \
   client->env_field_lengths[client->env_size] = flen; \
@@ -79,11 +80,15 @@ struct ebb_client {
   ev_io read_watcher;
   
   ev_io write_watcher;
-  const char *write_buffer;
-  ssize_t write_buffer_len;
+  GString *write_buffer;
   ssize_t written;
-  void *write_cb_data;
-  ebb_after_write_cb after_write_cb;
+  ebb_client_cb after_write_cb;
+  
+  void *data;
+  
+  char *input_head;
+  ssize_t input_head_len;
+  ssize_t input_read;
   
   ev_timer timeout_watcher;
   
