@@ -5,12 +5,12 @@ require 'server_test'
 
 trap('INT')  { exit(1) }
 begin
-  results = ServerTestResults.open('./results.dump')
+  results = ServerTestResults.open('./concurrency_results.dump')
   $servers.each { |s| s.start }
   sleep 3
-  [1,2,3,4,5,6,7,10,20,30,50,70,100].map { |i| i.kilobytes }.rand_each do |size|
+  [1,10,20,30,50,75,100].rand_each do |concurrency|
     $servers.rand_each do |server| 
-      if r = server.trial(:size => size)
+      if r = server.trial(:concurrency => concurrency)
         results << r
       else
         puts "error! restarting server"
@@ -24,5 +24,5 @@ begin
 ensure
   puts "\n\nkilling servers"
   $servers.each { |server| server.kill }  
-  results.write('./results.dump')
+  results.write('./concurrency_results.dump')
 end

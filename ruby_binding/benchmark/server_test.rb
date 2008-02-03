@@ -118,7 +118,7 @@ class ServerTestResults
   end
 
   def servers
-    @results.map {|r| r[:server] }.uniq
+    @results.map {|r| r[:server] }.uniq.sort
   end
 
   def data(server, what=:size)
@@ -164,7 +164,7 @@ class ServerTest
     size = options[:size] || 500
     requests = options[:requests] || 500
     
-    print "#{@name} with  (c=#{concurrency},s=#{number_to_human_size(size)})..."
+    print "#{@name} (c=#{concurrency},s=#{number_to_human_size(size)})  "
     $stdout.flush
     r = %x{ab -q -c #{concurrency} -n #{requests} http://0.0.0.0:#{@port}/#{size}}
     # Complete requests:      1000
@@ -204,10 +204,10 @@ $servers << ServerTest.new('ebb', 4002) do
   server.start
 end
 
-#$servers << ServerTest.new('mongrel', 4003) do
-#  require 'mongrel'
-#  Rack::Handler::Mongrel.run(app, :Port => 4003)
-#end
+$servers << ServerTest.new('mongrel', 4003) do
+ require 'mongrel'
+ Rack::Handler::Mongrel.run(app, :Port => 4003)
+end
  
 $servers << ServerTest.new('thin', 4004) do
   require 'thin'
