@@ -46,8 +46,9 @@
   field_value = any* >start_value %write_value;
 
   message_header = field_name ":" " "* field_value :> CRLF;
-
-  Request = Request_Line ( message_header )* ( CRLF @done );
+  content_length = "Content-Length:" " "* (digit+ >mark %content_length) :> CRLF;
+  
+  Request = Request_Line message_header* ( CRLF @done );
 
 main := Request;
 

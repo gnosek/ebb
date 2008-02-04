@@ -128,19 +128,49 @@ error:
   ebb_client_close(client);
 }
 
-#define min(a,b) (((a) < (b)) ? (a) : (b))
-GString* ebb_client_read_input(ebb_client *client, ssize_t to_read)
+int ebb_client_content_length(ebb_client *client)
 {
-  GString *string = g_string_sized_new(to_read);
+  int i;
+  char buffer[30];
   
-  assert(to_read >= 0);
+  for(i = 0; i < MAX_ENV; i++) {
+    if(client->env_fields[i] != NULL && 
+       0 == strncmp("Content-Length", client->env_fields[i], 14))
+    {
+      /* this is total fucking shit. i hate c. */
+      strncpy(buffer, client->env_values[i], client->env_value_lengths[i]);
+      buffer[client->env_value_lengths[i]] = '\0';
+      ebb_debug("Contentlength: %s", buffer);
+      return atoi(buffer);
+    }
+  }
+  return 0;
+}
+
+#define min(a,b) (((a) < (b)) ? (a) : (b))
+#define ramp(a) (a > 0 ? a : 0)
+GString* ebb_client_read_input(ebb_client *client, ssize_t asked_to_read)
+{
+  int content_length = ebb_client_content_length(client);
+  assert(client->input_read >= 0);
   assert(client->open);
   assert(client->server->open);
   assert(http_parser_is_finished(&(client->parser)));
   
-  ssize_t to_read_from_head = min(to_read, client->input_head_len - client->input_read);
-  ssize_t to_read_from_socket = min(0, to_read - to_read_from_head);
+  ssize_t to_read = min(asked_to_read, content_length - client->input_read);
+  GString *string = g_string_sized_new(to_read);
   
+  assert(to_read >= 0);
+  
+  ssize_t to_read_from_head = ramp(min(to_read, client->input_head_len - client->input_read));
+  ssize_t to_read_from_socket = to_read - to_read_from_head;
+  
+#ifdef DEBUG
+  ebb_debug("to_read: %d", (int)to_read);
+  ebb_debug("to_read_from_head: %d", (int)to_read_from_head);
+  ebb_debug("to_read_from_socket: %d", (int)to_read_from_socket);
+#endif
+
   assert(to_read_from_head >= 0);
   assert(to_read_from_socket >= 0);
   assert(to_read_from_head <= client->input_head_len);
@@ -226,6 +256,7 @@ void ebb_on_request( struct ev_loop *loop
   client->parser.request_path   = request_path_cb;
   client->parser.query_string   = query_string_cb;
   client->parser.http_version   = http_version_cb;
+  client->parser.content_length = content_length_cb;
   client->parser.header_done    = header_done_cb;
   
   /* OTHER */
@@ -233,6 +264,9 @@ void ebb_on_request( struct ev_loop *loop
   client->read = 0;
   client->server = server;
   client->write_buffer->len = 0; // see note in ebb_client_close
+  
+  // for error detection
+  client->input_read = -1;
   
   /* SETUP READ AND TIMEOUT WATCHERS */
   client->read_watcher.data = client;

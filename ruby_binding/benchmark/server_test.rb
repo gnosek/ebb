@@ -1,21 +1,34 @@
 $: << File.expand_path(File.dirname(__FILE__) + '/..')
 
 require 'rubygems'
-require 'camping'
 require 'rack'
 
-Camping.goes :CampApp
-module CampApp
-  module Controllers
-    class Index < R '/','/(\d+)'
-      @@responses = {}
-      def get(size=1)
-        @headers["Content-Type"] = 'text/plain'
-        size = size.to_i
-        raise "size is #{size}" if size <= 0
-        @@responses[size] ||= "C" * size
+class SimpleApp
+  @@responses = {}
+  def call(env)
+    command = env['PATH_INFO'].split('/').last
+    if command == "test_post_length"
+      input_body = ""
+      while chunk = env['rack.input'].read(10)
+        input_body << chunk 
       end
+      if env['Content-Length'].to_i == input_body.length
+        body = "Content-Length matches input length"
+        status = 200
+      else
+        body = "Content-Length doesn't matches input length! input_body.length = #{input_body.length}"
+        status = 500
+      end
+    elsif command.to_i > 0
+      size = command.to_i
+      @@responses[size] ||= "C" * size
+      body = @@responses[size]
+      status = 200
+    else
+      status = 404
+      body = "Undefined url"
     end
+    [status, {'Content-Type' => 'text/plain'}, body + "\r\n\r\n"]
   end
 end
 
@@ -161,12 +174,12 @@ class ServerTest
   
   def trial(options = {})
     concurrency = options[:concurrency] || 50
-    size = options[:size] || 500
+    size = options[:size] || 20 * 1.kilobyte
     requests = options[:requests] || 500
     
-    print "#{@name} (c=#{concurrency},s=#{number_to_human_size(size)})  "
+    print "#{@name} (c=#{concurrency},s=#{size})  "
     $stdout.flush
-    r = %x{ab -q -c #{concurrency} -n #{requests} http://0.0.0.0:#{@port}/#{size}}
+    r = %x{ab -t 6 -q -c #{concurrency} http://0.0.0.0:#{@port}/#{size}}
     # Complete requests:      1000
 
     return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
@@ -190,7 +203,7 @@ class ServerTest
 end
 
 $servers = []
-app = Rack::Adapter::Camping.new(CampApp)
+app = SimpleApp.new
 $servers << ServerTest.new('evented mongrel', 4001) do
   require 'mongrel'
   require 'swiftcore/evented_mongrel'

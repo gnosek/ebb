@@ -13,17 +13,16 @@ CC = gcc
 CFLAGS = $(GLIB_CFLAGS) $(LIBEV_CFLAGS)
 LIBS = $(LIBEV_LIBS) $(GLIB_LIBS)
 
-ALL_CFLAGS = -g -Wall $(CFLAGS)
+ALL_CFLAGS = -g -Wall $(CFLAGS) # -DDEBUG
 
 OBJS = ebb.o
-TESTS = ebb_test
 
 %.o : %.c Makefile
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
-all: $(TESTS) $(OBJS) mongrel_parser
+all: $(OBJS) mongrel_parser ebb_test
 
-%_test : $(OBJS) Makefile parser.o
+ebb_test : $(OBJS) Makefile parser.o
 	$(CC) $(ALL_CFLAGS) $(OBJS) mongrel/parser.o $@.c -o $@ $(LIBS)
 
 parser.o: mongrel_parser
@@ -36,5 +35,5 @@ test: test_server test.rb
 
 .PHONY : clean
 clean:
-	rm -f $(OBJS) $(TESTS)
+	rm -f $(OBJS) ebb_test
 	$(MAKE) -C ./mongrel clean

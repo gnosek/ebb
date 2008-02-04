@@ -31,6 +31,13 @@
       parser->http_field(parser->data, PTR_TO(field_start), parser->field_len, PTR_TO(mark), LEN(mark, fpc));
     }
   }
+  
+  action content_length {
+    if(parser->content_length != NULL) {
+      parser->content_length(parser->data, PTR_TO(mark), LEN(mark, fpc));
+    }
+  }
+  
   action request_method { 
     if(parser->request_method != NULL) 
       parser->request_method(parser->data, PTR_TO(mark), LEN(mark, fpc));

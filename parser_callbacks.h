@@ -47,6 +47,13 @@ void http_version_cb(void *data, const char *at, size_t length)
   ebb_client_add_env_const(client, EBB_HTTP_VERSION, at, length);
 }
 
+/* TODO: fix ragel to call this */
+void content_length_cb(void *data, const char *at, size_t length)
+{
+  ebb_client *client = (ebb_client*)(data);
+  ebb_client_add_env_const(client, EBB_CONTENT_LENGTH, at, length);
+}
+
 void header_done_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);

@@ -5,29 +5,34 @@ require 'camping'
 require 'rack'
 Debugger.start
 
-
-Camping.goes :CampApp
-module CampApp
-  module Controllers
-    class Index < R '/','/(\d+)'
-      def get(size=1)
-        @headers["Content-Type"] = 'text/plain'
-        size = size.to_i
-        raise "size is #{size}" if size <= 0
-        "C" * size + "\r\n\r\n"
-      end
-    end
-  end
-end
-
 class SimpleApp
+  @@responses = {}
   def call(env)
-    [200, {:content_type => 'text/plain'}, env.inspect + "\r\n\r\n"]
+    command = env['PATH_INFO'].split('/').last
+    if command == "test_post_length"
+      input_body = ""
+      while chunk = env['rack.input'].read(10)
+        input_body << chunk 
+      end
+      if env['Content-Length'].to_i == input_body.length
+        body = "Content-Length matches input length"
+        status = 200
+      else
+        body = "Content-Length doesn't matches input length! input_body.length = #{input_body.length}"
+        status = 500
+      end
+    elsif command.to_i > 0
+      size = command.to_i
+      @@responses[size] ||= "C" * size
+      body = @@responses[size]
+      status = 200
+    else
+      status = 404
+      body = "Undefined url"
+    end
+    [status, {'Content-Type' => 'text/plain'}, body + "\r\n\r\n"]
   end
 end
 
-app = Rack::Adapter::Camping.new(CampApp)
-#app = SimpleApp.new
-
-server = Ebb::Server.new(app)
+server = Ebb::Server.new(SimpleApp.new)
 server.start

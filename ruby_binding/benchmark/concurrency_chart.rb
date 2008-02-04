@@ -18,7 +18,7 @@ max_y = 0
 results = ServerTestResults.open(ARGV[0] || 'concurrency_results.dump')
 all_m = []
 concurrency_chart = GoogleChart::LineChart.new('400x300', 
-      Time.now.strftime('%Y.%m.%d, 5 byte responses'), 
+      Time.now.strftime('%Y.%m.%d, 20 kbyte responses'), 
       true)
 results.servers.each do |server|
   data = results.data(server, :concurrency).sort

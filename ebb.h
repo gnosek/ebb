@@ -67,6 +67,7 @@ enum { EBB_REQUEST_METHOD
      , EBB_REQUEST_BODY
      , EBB_SERVER_NAME
      , EBB_SERVER_PORT
+     , EBB_CONTENT_LENGTH
      };
 
 struct ebb_client {

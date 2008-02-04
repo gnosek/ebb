@@ -4,24 +4,28 @@
 #include <string.h>
 #include "ebb.h"
 
-const char *header = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\n";
 
 void request_cb(ebb_client *client, void *data)
 {
+  const char *header = "HTTP/1.1 200 OK\r\n"
+                       "Connection: close\r\n"
+                       "Content-Type: text/plain\r\n\r\n";
   int i;
   //g_message("Request");
   
   ebb_client_write(client, header, strlen(header));
   
   for(i=0; i<client->env_size; i++) {
-    ebb_client_write(client, client->env_fields[i], client->env_field_lengths[i]);
-    ebb_client_write(client, "\r\n", 2);
-    ebb_client_write(client, client->env_values[i], client->env_value_lengths[i]);
-    ebb_client_write(client, "\r\n\r\n", 4);
+    if(client->env_fields[i]) {
+      ebb_client_write(client, client->env_fields[i], client->env_field_lengths[i]);
+      ebb_client_write(client, "\r\n", 2);
+      ebb_client_write(client, client->env_values[i], client->env_value_lengths[i]);
+      ebb_client_write(client, "\r\n\r\n", 4);
+    }
   }
   
   ebb_client_write(client, "Hello.\r\n\r\n", 6);
-  ebb_client_close(client);
+  ebb_client_start_writing(client, NULL);
 }
 
 int main(void)

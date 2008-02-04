@@ -15,7 +15,7 @@
 #define PTR_TO(F) (buffer + parser->F)
 
 /** machine **/
-#line 114 "parser.rl"
+#line 121 "parser.rl"
 
 
 /** Data **/
@@ -27,7 +27,7 @@ static const int http_parser_error = 0;
 
 static const int http_parser_en_main = 1;
 
-#line 118 "parser.rl"
+#line 125 "parser.rl"
 
 int http_parser_init(http_parser *parser)  {
   int cs = 0;
@@ -36,7 +36,7 @@ int http_parser_init(http_parser *parser)  {
 	{
 	cs = http_parser_start;
 	}
-#line 122 "parser.rl"
+#line 129 "parser.rl"
   parser->cs = cs;
   parser->body_start = 0;
   parser->content_len = 0;
@@ -110,7 +110,7 @@ case 2:
 		goto st34;
 	goto st0;
 tr2:
-#line 34 "parser.rl"
+#line 41 "parser.rl"
 	{ 
     if(parser->request_method != NULL) 
       parser->request_method(parser->data, PTR_TO(mark), LEN(mark, p));
@@ -149,45 +149,45 @@ case 4:
 		goto tr8;
 	goto st0;
 tr8:
-#line 38 "parser.rl"
+#line 45 "parser.rl"
 	{ 
     if(parser->request_uri != NULL)
       parser->request_uri(parser->data, PTR_TO(mark), LEN(mark, p));
   }
 	goto st5;
 tr33:
-#line 54 "parser.rl"
+#line 61 "parser.rl"
 	{
     if(parser->request_path != NULL)
       parser->request_path(parser->data, PTR_TO(mark), LEN(mark,p));
   }
-#line 38 "parser.rl"
+#line 45 "parser.rl"
 	{ 
     if(parser->request_uri != NULL)
       parser->request_uri(parser->data, PTR_TO(mark), LEN(mark, p));
   }
 	goto st5;
 tr43:
-#line 43 "parser.rl"
+#line 50 "parser.rl"
 	{MARK(query_start, p); }
-#line 44 "parser.rl"
+#line 51 "parser.rl"
 	{ 
     if(parser->query_string != NULL)
       parser->query_string(parser->data, PTR_TO(query_start), LEN(query_start, p));
   }
-#line 38 "parser.rl"
+#line 45 "parser.rl"
 	{ 
     if(parser->request_uri != NULL)
       parser->request_uri(parser->data, PTR_TO(mark), LEN(mark, p));
   }
 	goto st5;
 tr46:
-#line 44 "parser.rl"
+#line 51 "parser.rl"
 	{ 
     if(parser->query_string != NULL)
       parser->query_string(parser->data, PTR_TO(query_start), LEN(query_start, p));
   }
-#line 38 "parser.rl"
+#line 45 "parser.rl"
 	{ 
     if(parser->request_uri != NULL)
       parser->request_uri(parser->data, PTR_TO(mark), LEN(mark, p));
@@ -267,7 +267,7 @@ case 13:
 		goto st13;
 	goto st0;
 tr17:
-#line 49 "parser.rl"
+#line 56 "parser.rl"
 	{	
     if(parser->http_version != NULL)
       parser->http_version(parser->data, PTR_TO(mark), LEN(mark, p));
@@ -325,7 +325,7 @@ case 16:
 		goto tr21;
 	goto st0;
 tr21:
-#line 59 "parser.rl"
+#line 66 "parser.rl"
 	{ 
     parser->body_start = p - buffer + 1; 
     if(parser->header_done != NULL)
@@ -528,7 +528,7 @@ case 26:
 		goto st24;
 	goto st0;
 tr35:
-#line 54 "parser.rl"
+#line 61 "parser.rl"
 	{
     if(parser->request_path != NULL)
       parser->request_path(parser->data, PTR_TO(mark), LEN(mark,p));
@@ -580,7 +580,7 @@ case 29:
 		goto st27;
 	goto st0;
 tr36:
-#line 54 "parser.rl"
+#line 61 "parser.rl"
 	{
     if(parser->request_path != NULL)
       parser->request_path(parser->data, PTR_TO(mark), LEN(mark,p));
@@ -605,7 +605,7 @@ case 30:
 		goto st0;
 	goto tr42;
 tr42:
-#line 43 "parser.rl"
+#line 50 "parser.rl"
 	{MARK(query_start, p); }
 	goto st31;
 st31:
@@ -627,7 +627,7 @@ case 31:
 		goto st0;
 	goto st31;
 tr44:
-#line 43 "parser.rl"
+#line 50 "parser.rl"
 	{MARK(query_start, p); }
 	goto st32;
 st32:
@@ -1045,7 +1045,7 @@ case 52:
 
 	_out: {}
 	}
-#line 149 "parser.rl"
+#line 156 "parser.rl"
 
   parser->cs = cs;
   parser->nread += p - (buffer + off);
@@ -1061,7 +1061,7 @@ case 52:
     /* final \r\n combo encountered so stop right here */
     
 #line 1064 "parser.c"
-#line 163 "parser.rl"
+#line 170 "parser.rl"
     parser->nread++;
   }
 
@@ -1074,7 +1074,7 @@ int http_parser_finish(http_parser *parser)
 
   
 #line 1077 "parser.c"
-#line 174 "parser.rl"
+#line 181 "parser.rl"
 
   parser->cs = cs;
 
