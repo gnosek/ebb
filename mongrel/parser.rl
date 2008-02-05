@@ -27,14 +27,15 @@
 
   action start_value { MARK(mark, fpc); }
   action write_value { 
-    if(parser->http_field != NULL) {
-      parser->http_field(parser->data, PTR_TO(field_start), parser->field_len, PTR_TO(mark), LEN(mark, fpc));
-    }
-  }
-  
-  action content_length {
-    if(parser->content_length != NULL) {
-      parser->content_length(parser->data, PTR_TO(mark), LEN(mark, fpc));
+    /* this is really ugly. I KNOW - help me. */
+    if(parser->field_len == 14 && *PTR_TO(field_start) == 'C') {
+      if(parser->content_length != NULL) {
+        parser->content_length(parser->data, PTR_TO(mark), LEN(mark, fpc));
+      }
+    } else {
+      if(parser->http_field != NULL) {
+        parser->http_field(parser->data, PTR_TO(field_start), parser->field_len, PTR_TO(mark), LEN(mark, fpc));
+      }
     }
   }
   

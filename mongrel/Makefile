@@ -9,7 +9,7 @@ LIBS =
 
 all: $(OBJS)
 
-parser.c: parser.rl
+parser.c: parser.rl common.rl
 	ragel parser.rl | rlgen-cd -G2 -o parser.c 
 
 .PHONY : clean clobber

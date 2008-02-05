@@ -15,25 +15,25 @@ LIBS = $(LIBEV_LIBS) $(GLIB_LIBS)
 
 ALL_CFLAGS = -g -Wall $(CFLAGS) # -DDEBUG
 
-OBJS = ebb.o
+all: ebb.o mongrel_parser ebb_test ruby_binding
 
-%.o : %.c Makefile
+ebb.o : ebb.c Makefile parser_callbacks.h
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
-all: $(OBJS) mongrel_parser ebb_test
-
-ebb_test : $(OBJS) Makefile parser.o
-	$(CC) $(ALL_CFLAGS) $(OBJS) mongrel/parser.o $@.c -o $@ $(LIBS)
+ebb_test : ebb.o Makefile parser.o
+	$(CC) $(ALL_CFLAGS) ebb.o mongrel/parser.o $@.c -o $@ $(LIBS)
 
 parser.o: mongrel_parser
 
 mongrel_parser:
 	make -C ./mongrel
 
-test: test_server test.rb
-	ruby test.rb
+ruby_binding: ebb.o parser.o
+	make -C ./ruby_binding clean
+	make -C ./ruby_binding
 
 .PHONY : clean
 clean:
-	rm -f $(OBJS) ebb_test
-	$(MAKE) -C ./mongrel clean
+	rm -f ebb.o ebb_test
+	make -C ./mongrel clean
+	make -C ./ruby_binding clean

@@ -11,14 +11,16 @@ class SimpleApp
     command = env['PATH_INFO'].split('/').last
     if command == "test_post_length"
       input_body = ""
-      while chunk = env['rack.input'].read(10)
+      while chunk = env['rack.input'].read(1024*16)
         input_body << chunk 
       end
-      if env['Content-Length'].to_i == input_body.length
+      if env['HTTP_CONTENT_LENGTH'].to_i == input_body.length
         body = "Content-Length matches input length"
         status = 200
       else
-        body = "Content-Length doesn't matches input length! input_body.length = #{input_body.length}"
+        body = "Content-Length doesn't matches input length! 
+          content_length = #{env['HTTP_CONTENT_LENGTH'].to_i}
+          input_body.length = #{input_body.length}"
         status = 500
       end
     elsif command.to_i > 0

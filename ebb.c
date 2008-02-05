@@ -21,8 +21,48 @@
 #include "mongrel/parser.h"
 
 #include "ebb.h"
+
+#define ebb_env_add(client, field,flen,value,vlen)                          \
+  client->env_fields[client->env_size] = field;                             \
+  client->env_field_lengths[client->env_size] = flen;                       \
+  client->env_values[client->env_size] = value;                             \
+  client->env_value_lengths[client->env_size] = vlen;                       \
+  client->env_size += 1;                                                     
+#define ebb_env_add_const(client,field,value,vlen)                          \
+  client->env_fields[client->env_size] = NULL;                              \
+  client->env_field_lengths[client->env_size] = field;                      \
+  client->env_values[client->env_size] = value;                             \
+  client->env_value_lengths[client->env_size] = vlen;                       \
+  client->env_size += 1;                                                     
+#define ebb_env_error(client)                                               \
+  client->env_fields[client->env_size] = NULL;                              \
+  client->env_field_lengths[client->env_size] = -1;                         \
+  client->env_values[client->env_size] = NULL;                              \
+  client->env_value_lengths[client->env_size] = -1;                         \
+  client->env_size += 1;                                                     
+
 #include "parser_callbacks.h"
 
+int ebb_env_has_error(ebb_client *client)
+{
+  int i;
+  for(i = 0; i < client->env_size; i++)
+    if(client->env_field_lengths[i] < 0)
+      return TRUE;
+  return FALSE;
+}
+
+void ebb_client_set_nonblocking(ebb_client *client)
+{
+  int flags = fcntl(client->fd, F_GETFL, 0);
+  assert(0 <= fcntl(client->fd, F_SETFL, flags | O_NONBLOCK));
+}
+
+void ebb_client_set_blocking(ebb_client *client)
+{
+  int flags = fcntl(client->fd, F_GETFL, 0);
+  assert(0 <= fcntl(client->fd, F_SETFL, flags & ~O_NONBLOCK));
+}
 
 void ebb_dispatch(ebb_client *client)
 {
@@ -30,12 +70,17 @@ void ebb_dispatch(ebb_client *client)
   
   assert(client->open);
   
+  if(ebb_env_has_error(client)) {
+    ebb_client_close(client);
+    return;
+  }
+  
   /* Set the env variables */
-  ebb_client_add_env_const(client, EBB_SERVER_NAME
+  ebb_env_add_const(client, EBB_SERVER_NAME
                                  , server->address
                                  , strlen(server->address)
                                  );
-  ebb_client_add_env_const(client, EBB_SERVER_PORT
+  ebb_env_add_const(client, EBB_SERVER_PORT
                                  , server->port
                                  , strlen(server->port)
                                  );
@@ -83,7 +128,7 @@ void ebb_on_readable( struct ev_loop *loop
                      );
   if(read == 0) {
     //ebb_warning("read zero from client?");
-    //ebb_client_close(client); /* XXX is this the right action to take? */
+    ebb_client_close(client); /* XXX is this the right action to take? */
     return;
   } else if(read < 0) {
     if(errno == EBADF || errno == ECONNRESET)
@@ -128,36 +173,17 @@ error:
   ebb_client_close(client);
 }
 
-int ebb_client_content_length(ebb_client *client)
-{
-  int i;
-  char buffer[30];
-  
-  for(i = 0; i < MAX_ENV; i++) {
-    if(client->env_fields[i] != NULL && 
-       0 == strncmp("Content-Length", client->env_fields[i], 14))
-    {
-      /* this is total fucking shit. i hate c. */
-      strncpy(buffer, client->env_values[i], client->env_value_lengths[i]);
-      buffer[client->env_value_lengths[i]] = '\0';
-      ebb_debug("Contentlength: %s", buffer);
-      return atoi(buffer);
-    }
-  }
-  return 0;
-}
-
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 #define ramp(a) (a > 0 ? a : 0)
 GString* ebb_client_read_input(ebb_client *client, ssize_t asked_to_read)
 {
-  int content_length = ebb_client_content_length(client);
+  assert(client->content_length >= 0);
   assert(client->input_read >= 0);
   assert(client->open);
   assert(client->server->open);
   assert(http_parser_is_finished(&(client->parser)));
   
-  ssize_t to_read = min(asked_to_read, content_length - client->input_read);
+  ssize_t to_read = min(asked_to_read, client->content_length - client->input_read);
   GString *string = g_string_sized_new(to_read);
   
   assert(to_read >= 0);
@@ -245,6 +271,8 @@ void ebb_on_request( struct ev_loop *loop
   socklen_t len;
   client->fd = accept(server->fd, (struct sockaddr*)&(server->sockaddr), &len);
   assert(client->fd >= 0);
+  ebb_client_set_nonblocking(client);
+  
   
   /* INITIALIZE inline http_parser */
   http_parser_init(&(client->parser));
@@ -267,6 +295,7 @@ void ebb_on_request( struct ev_loop *loop
   
   // for error detection
   client->input_read = -1;
+  client->content_length = -1;
   
   /* SETUP READ AND TIMEOUT WATCHERS */
   client->read_watcher.data = client;
@@ -440,7 +469,7 @@ void ebb_on_writable( struct ev_loop *loop
 #ifdef DEBUG
     ebb_warning("Error writing: %s", strerror(errno));
 #endif
-    // ebb_client_close(client);
+    ebb_client_close(client);
     return;
   }
   client->written += sent;
@@ -468,9 +497,7 @@ void ebb_client_start_writing( ebb_client *client
   assert(client->open);
   assert(FALSE == ev_is_active(&(client->write_watcher)));
   
-  /* We want the reads to be blocking but the writes to block */
-  int r = fcntl(client->fd, F_SETFL, O_NONBLOCK);
-  assert(r >= 0);
+  ebb_client_set_nonblocking(client);
   
   client->written = 0;
   client->after_write_cb = after_write_cb;

@@ -21,6 +21,7 @@ static VALUE global_request_body;
 static VALUE global_server_name;
 static VALUE global_server_port;
 static VALUE global_path_info;
+static VALUE global_content_length;
 
 
 /* Variables with an underscore are C-level variables */
@@ -38,6 +39,7 @@ VALUE env_field(const char *field, int length)
       case EBB_REQUEST_BODY:    return global_request_body;
       case EBB_SERVER_NAME:     return global_server_name;
       case EBB_SERVER_PORT:     return global_server_port;
+      case EBB_CONTENT_LENGTH:  return global_content_length;
       default: assert(FALSE); /* unknown const */
     }
   else
@@ -73,6 +75,8 @@ VALUE client_new(ebb_client *_client)
   VALUE client = Data_Wrap_Struct(cClient, 0, 0, _client);
   
   _client->data = (void*)client;
+  
+  ebb_client_set_blocking(_client);
   
   rb_iv_set(client, "@env", client_env(client));
   rb_iv_set(client, "@write_buffer", rb_ary_new());
@@ -191,6 +195,7 @@ void Init_ebb_ext()
   cServer = rb_define_class_under(mEbb, "Server", rb_cObject);
   cClient = rb_define_class_under(mEbb, "Client", rb_cObject);
   
+/** Defines global strings in the init method. */
 #define DEF_GLOBAL(N, val)   global_##N = rb_obj_freeze(rb_str_new2(val)); rb_global_variable(&global_##N)
   DEF_GLOBAL(request_method, "REQUEST_METHOD");  
   DEF_GLOBAL(request_uri, "REQUEST_URI");
@@ -202,6 +207,7 @@ void Init_ebb_ext()
   DEF_GLOBAL(server_name, "SERVER_NAME");
   DEF_GLOBAL(server_port, "SERVER_PORT");
   DEF_GLOBAL(path_info, "PATH_INFO");
+  DEF_GLOBAL(content_length, "HTTP_CONTENT_LENGTH");
   
   rb_define_alloc_func(cServer, server_alloc);
   rb_define_method(cServer, "init", server_init, 2);

@@ -12,6 +12,7 @@ void request_cb(ebb_client *client, void *data)
                        "Content-Type: text/plain\r\n\r\n";
   int i;
   //g_message("Request");
+  char buffer[1000];
   
   ebb_client_write(client, header, strlen(header));
   
@@ -21,10 +22,17 @@ void request_cb(ebb_client *client, void *data)
       ebb_client_write(client, "\r\n", 2);
       ebb_client_write(client, client->env_values[i], client->env_value_lengths[i]);
       ebb_client_write(client, "\r\n\r\n", 4);
+      
+      strncpy(buffer, client->env_fields[i], client->env_field_lengths[i]);
+      strncpy(buffer+client->env_field_lengths[i], client->env_values[i], client->env_value_lengths[i]);
+      buffer[client->env_field_lengths[i] + client->env_value_lengths[i] ] = '\0';
+      
+      printf("%s\n", buffer);
     }
   }
   
   ebb_client_write(client, "Hello.\r\n\r\n", 6);
+  
   ebb_client_start_writing(client, NULL);
 }
 

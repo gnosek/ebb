@@ -26,9 +26,9 @@ typedef struct ebb_client ebb_client;
   g_log(EBB_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, str, ## __VA_ARGS__);
 
 #define EBB_CHUNKSIZE (16*1024)
-#define EBB_MAX_CLIENTS 950
+#define EBB_MAX_CLIENTS 200
 #define EBB_TIMEOUT 30.0
-#define MAX_ENV 100
+#define EBB_MAX_ENV 100
 #define EBB_TCP_COMMON          \
   unsigned open : 1;            \
   int fd;                       \
@@ -39,24 +39,15 @@ typedef struct ebb_client ebb_client;
 typedef void (*ebb_client_cb)(ebb_client*);
 
 void ebb_client_close(ebb_client*);
+void ebb_client_set_nonblocking(ebb_client *client);
+void ebb_client_set_blocking(ebb_client *client);
 void ebb_client_write(ebb_client*, const char *data, int length);
 void ebb_client_start_writing( ebb_client *client
                              , ebb_client_cb after_write_cb
                              );
 /* User must free the GString returned from ebb_client_read_input */
 GString* ebb_client_read_input(ebb_client *client, ssize_t size);
-#define ebb_client_add_env(client, field,flen,value,vlen) \
-  client->env_fields[client->env_size] = field; \
-  client->env_field_lengths[client->env_size] = flen; \
-  client->env_values[client->env_size] = value; \
-  client->env_value_lengths[client->env_size] = vlen; \
-  client->env_size += 1;
-#define ebb_client_add_env_const(client,field,value,vlen) \
-  client->env_fields[client->env_size] = NULL; \
-  client->env_field_lengths[client->env_size] = field; \
-  client->env_values[client->env_size] = value; \
-  client->env_value_lengths[client->env_size] = vlen; \
-  client->env_size += 1;
+
 
 enum { EBB_REQUEST_METHOD
      , EBB_REQUEST_URI
@@ -90,15 +81,16 @@ struct ebb_client {
   char *input_head;
   ssize_t input_head_len;
   ssize_t input_read;
+  int content_length;
   
   ev_timer timeout_watcher;
   
   /* the ENV structure */
   int env_size;
-  const char *env_fields[MAX_ENV];
-  int env_field_lengths[MAX_ENV];
-  const char *env_values[MAX_ENV];
-  int env_value_lengths[MAX_ENV];
+  const char *env_fields[EBB_MAX_ENV];
+  int  env_field_lengths[EBB_MAX_ENV];
+  const char *env_values[EBB_MAX_ENV];
+  int  env_value_lengths[EBB_MAX_ENV];
 };
 
 /*** Ebb Server ***/

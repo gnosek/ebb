@@ -12,11 +12,13 @@ class SimpleApp
       while chunk = env['rack.input'].read(10)
         input_body << chunk 
       end
-      if env['Content-Length'].to_i == input_body.length
+      if env['HTTP_CONTENT_LENGTH'].to_i == input_body.length
         body = "Content-Length matches input length"
         status = 200
       else
-        body = "Content-Length doesn't matches input length! input_body.length = #{input_body.length}"
+        body = "Content-Length doesn't matches input length! 
+          content_length = #{env['HTTP_CONTENT_LENGTH'].to_i}
+          input_body.length = #{input_body.length}"
         status = 500
       end
     elsif command.to_i > 0
@@ -179,9 +181,39 @@ class ServerTest
     
     print "#{@name} (c=#{concurrency},s=#{size})  "
     $stdout.flush
-    r = %x{ab -t 6 -q -c #{concurrency} http://0.0.0.0:#{@port}/#{size}}
+    r = %x{ab -t 3 -q -c #{concurrency} http://0.0.0.0:#{@port}/#{size}}
     # Complete requests:      1000
 
+    return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
+    rps = $1.to_f
+    if r =~ /Complete requests:\s*(\d+)/
+      completed_requests = $1.to_i
+    end
+    puts "#{rps} req/sec (#{completed_requests} completed)"
+    {
+      :test => 'get',
+      :server=> @name, 
+      :concurrency => concurrency, 
+      :size => size,
+      :rps => rps,
+      :requests => requests,
+      :requests_completed => completed_requests,
+      :time => Time.now
+    }
+  end
+
+  def post_trial(size = 1, concurrency = 10)
+    
+    print "#{@name} (c=#{concurrency},posting=#{size})  "
+    $stdout.flush
+    
+    fn = "/tmp/ebb_post_trial_#{size}"
+    unless FileTest.exists?(fn)
+      File.open(fn, 'w+') { |f| f.write("C"*size) }
+    end
+    
+    r = %x{ab -t 6 -q -c #{concurrency} -p #{fn} http://0.0.0.0:#{@port}/test_post_length}
+    
     return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
     rps = $1.to_f
     if r =~ /Complete requests:\s*(\d+)/
@@ -194,7 +226,6 @@ class ServerTest
       :concurrency => concurrency, 
       :size => size,
       :rps => rps,
-      :requests => requests,
       :requests_completed => completed_requests,
       :time => Time.now
     }
