@@ -79,7 +79,6 @@ module Ebb
       trap('INT')  { puts "got INT"; stop }
       trap('TERM') { puts "got TERM"; stop }
       _start
-      
       while process_connections
         unless @waiting_clients.empty?
           if $debug

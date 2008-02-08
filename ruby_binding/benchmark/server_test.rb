@@ -21,6 +21,11 @@ class SimpleApp
           input_body.length = #{input_body.length}"
         status = 500
       end
+    elsif command =~ /slow_(\d+)$/
+      seconds = $1.to_i
+      sleep seconds
+      status = 200
+      body = "waited #{seconds} seconds"
     elsif command.to_i > 0
       size = command.to_i
       @@responses[size] ||= "C" * size
@@ -201,6 +206,31 @@ class ServerTest
       :time => Time.now
     }
   end
+  
+  def wait_trial(wait, concurrency = 50)
+    
+    print "#{@name} (c=#{concurrency},wait=#{wait})  "
+    $stdout.flush
+    r = %x{ab -t 5 -q -c #{concurrency} http://0.0.0.0:#{@port}/slow_#{wait}}
+    # Complete requests:      1000
+
+    return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
+    rps = $1.to_f
+    if r =~ /Complete requests:\s*(\d+)/
+      completed_requests = $1.to_i
+    end
+    puts "#{rps} req/sec (#{completed_requests} completed)"
+    {
+      :test => 'get',
+      :server=> @name, 
+      :concurrency => concurrency,
+      :wait => wait,
+      :rps => rps,
+      :requests_completed => completed_requests,
+      :time => Time.now
+    }
+  end
+  
 
   def post_trial(size = 1, concurrency = 10)
     

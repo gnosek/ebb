@@ -36,7 +36,6 @@ VALUE env_field(const char *field, int length)
       case EBB_REQUEST_PATH:    return global_request_path;
       case EBB_QUERY_STRING:    return global_query_string;
       case EBB_HTTP_VERSION:    return global_http_version;
-      case EBB_REQUEST_BODY:    return global_request_body;
       case EBB_SERVER_NAME:     return global_server_name;
       case EBB_SERVER_PORT:     return global_server_port;
       case EBB_CONTENT_LENGTH:  return global_content_length;
@@ -75,8 +74,6 @@ VALUE client_new(ebb_client *_client)
   VALUE client = Data_Wrap_Struct(cClient, 0, 0, _client);
   
   _client->data = (void*)client;
-  
-  ebb_client_set_blocking(_client);
   
   rb_iv_set(client, "@env", client_env(client));
   rb_iv_set(client, "@write_buffer", rb_ary_new());
@@ -178,12 +175,20 @@ VALUE client_read_input(VALUE client, VALUE size)
   ebb_client *_client;
   GString *_string;
   VALUE string;
+  int _size = FIX2INT(size);
+  int nread;
   
   Data_Get_Struct(client, ebb_client, _client);
-  _string = ebb_client_read_input(_client, FIX2INT(size));
   
-  string = _string->len == 0 ? Qnil : rb_str_new(_string->str, _string->len);
-  g_string_free(_string, TRUE);
+  string = rb_str_buf_new( _size );
+  nread = ebb_client_read(_client, RSTRING_PTR(string), _size);
+  RSTRING_LEN(string) = nread;
+  
+  if(nread < 0)
+    rb_raise(rb_eRuntimeError,"There was a problem reading from input (bad tmp file?)");
+  
+  if(nread == 0)
+    return Qnil;
   
   return string;
 }

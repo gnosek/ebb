@@ -11,7 +11,7 @@ LIBEV_LIBS   = -L$(LIBEV_PREFIX)/lib -lev
 
 CC = gcc
 CFLAGS = $(GLIB_CFLAGS) $(LIBEV_CFLAGS)
-LIBS = $(LIBEV_LIBS) $(GLIB_LIBS)
+LIBS = $(LIBEV_LIBS) $(GLIB_LIBS) -lpthread
 
 ALL_CFLAGS = -g -Wall $(CFLAGS) # -DDEBUG
 
