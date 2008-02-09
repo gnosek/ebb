@@ -217,7 +217,7 @@ void Init_ebb_ext()
   rb_define_alloc_func(cServer, server_alloc);
   rb_define_method(cServer, "init", server_init, 2);
   rb_define_method(cServer, "process_connections", server_process_connections, 0);
-  rb_define_method(cServer, "_start", server_start, 0);
+  rb_define_method(cServer, "really_start", server_start, 0);
   rb_define_method(cServer, "stop", server_stop, 0);
   
   rb_define_method(cClient, "write", client_write, 1);

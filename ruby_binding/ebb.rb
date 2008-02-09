@@ -76,10 +76,11 @@ module Ebb
     end
     
     def start
-      trap('INT')  { puts "got INT"; stop }
-      trap('TERM') { puts "got TERM"; stop }
-      _start
-      while process_connections
+      trap('INT')  { @running = false }
+      trap('TERM') { @running = false }
+      really_start
+      @running = true
+      while process_connections and @running
         unless @waiting_clients.empty?
           if $debug
             puts "#{@waiting_clients.length} waiting clients" if @waiting_clients.length > 1
@@ -89,6 +90,8 @@ module Ebb
           client.start_writing
         end
       end
+    ensure
+      stop
     end
   end
   

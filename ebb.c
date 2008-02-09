@@ -372,23 +372,22 @@ void ebb_server_free(ebb_server *server)
 
 void ebb_server_stop(ebb_server *server)
 {
-  ebb_info("Stopping ebb server");
-  assert(server->open);
-  
-  int i;
-  ebb_client *client;
-  for(i=0; i < EBB_MAX_CLIENTS; i++)
-    ebb_client_close(client);
-  
-  if(server->request_watcher) {
-    printf("killing request watcher\n");
-    ev_io_stop(server->loop, server->request_watcher);
-    free(server->request_watcher);
-    server->request_watcher = NULL;
+  if(server->open) {
+    ebb_info("Stopping Ebb server");
+    int i;
+    ebb_client *client;
+    for(i=0; i < EBB_MAX_CLIENTS; i++)
+      ebb_client_close(client);
+    
+    if(server->request_watcher) {
+      ev_io_stop(server->loop, server->request_watcher);
+      free(server->request_watcher);
+      server->request_watcher = NULL;
+    }
+    
+    close(server->fd);
+    server->open = FALSE;
   }
-  
-  close(server->fd);
-  server->open = FALSE;
 }
 
 
