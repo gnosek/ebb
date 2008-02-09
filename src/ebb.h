@@ -7,7 +7,7 @@
 #include <netinet/in.h>
 #include <glib.h>
 #include <ev.h>
-#include "mongrel/parser.h"
+#include "parser.h"
 
 #ifndef ebb_h
 #define ebb_h
@@ -46,7 +46,6 @@ void ebb_client_start_writing( ebb_client *client
                              );
 /* User must free the GString returned from ebb_client_read_input */
 GString* ebb_client_read_input(ebb_client *client, ssize_t size);
-
 
 enum { EBB_REQUEST_METHOD
      , EBB_REQUEST_URI

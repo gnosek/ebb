@@ -76,6 +76,7 @@ VALUE client_new(ebb_client *_client)
   _client->data = (void*)client;
   
   rb_iv_set(client, "@env", client_env(client));
+  rb_iv_set(client, "@upload_filename", rb_str_new2(_client->upload_file_filename));
   rb_iv_set(client, "@write_buffer", rb_ary_new());
   return client;
 }

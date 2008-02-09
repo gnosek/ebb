@@ -30,5 +30,5 @@ end
 response_chart.axis(:y, :range => [0,max_y])
 response_chart.axis(:y, :labels => ['req/s'], :positions => [50])
 response_chart.axis(:x, :range => [0,max_x])
-response_chart.axis(:x, :labels => ['kilobytes requested'], :positions => [50])
+response_chart.axis(:x, :labels => ['kilobytes POSTed'], :positions => [50])
 puts response_chart.to_url

@@ -19,8 +19,7 @@
 #include <glib.h>
 #include <ev.h>
 
-#include "mongrel/parser.h"
-
+#include "parser.h"
 #include "ebb.h"
 
 #define min(a,b) (a < b ? a : b)
@@ -153,6 +152,7 @@ void* read_body_into_file(void *_client)
     written += received;
   }
   rewind(tmpfile);
+  
   return NULL;
 error:
   ebb_client_close(client);

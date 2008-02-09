@@ -6,7 +6,7 @@ require 'ebb_ext'
 
 module Ebb
   class Client
-    attr_reader :env
+    attr_reader :env, :upload_filename
     
     def env
       @env.update(
@@ -16,6 +16,7 @@ module Ebb
   end
   
   class Input
+    CHUNKSIZE = 4*1024
     def initialize(client)
       @client = client
     end
@@ -30,6 +31,10 @@ module Ebb
     
     def each
       raise NotImplementedError
+    end
+    
+    def tmp_filename
+      @client.upload_filename
     end
   end
   
@@ -82,8 +87,8 @@ module Ebb
       @running = true
       while process_connections and @running
         unless @waiting_clients.empty?
-          if $debug
-            puts "#{@waiting_clients.length} waiting clients" if @waiting_clients.length > 1
+          if $debug and  @waiting_clients.length > 1
+            puts "#{@waiting_clients.length} waiting clients"
           end
           client = @waiting_clients.shift
           process_client(client)

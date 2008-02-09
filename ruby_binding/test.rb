@@ -1,8 +1,6 @@
 require 'ebb'
 require 'rubygems'
 require 'ruby-debug'
-require 'camping'
-require 'rack'
 Debugger.start
 
 class SimpleApp
@@ -42,5 +40,13 @@ class SimpleApp
   end
 end
 
-server = Ebb::Server.new(SimpleApp.new)
-server.start
+require 'expectations'
+Expectations do 
+  expect 2 do
+    #server = Ebb::Server.new(SimpleApp.new)
+    #server.start
+    1+1
+  end
+end
+
+

@@ -5,6 +5,7 @@ require 'rack'
 
 class SimpleApp
   @@responses = {}
+  @@count = 0
   def call(env)
     command = env['PATH_INFO'].split('/').last
     if command == "test_post_length"
@@ -21,6 +22,15 @@ class SimpleApp
           input_body.length = #{input_body.length}"
         status = 500
       end
+    elsif command =~ /periodically_slow_(\d+)$/
+      if @@count % 10 == 0
+        seconds = $1.to_i
+        sleep seconds
+      else
+        seconds = 0
+      end
+      @@count += 1
+      body = "waited #{seconds} seconds"
     elsif command =~ /slow_(\d+)$/
       seconds = $1.to_i
       sleep seconds
@@ -211,7 +221,7 @@ class ServerTest
     
     print "#{@name} (c=#{concurrency},wait=#{wait})  "
     $stdout.flush
-    r = %x{ab -t 5 -q -c #{concurrency} http://0.0.0.0:#{@port}/slow_#{wait}}
+    r = %x{ab -t 5 -q -c #{concurrency} http://0.0.0.0:#{@port}/periodically_slow_#{wait}}
     # Complete requests:      1000
 
     return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/

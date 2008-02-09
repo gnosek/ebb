@@ -1,12 +1,9 @@
-
 require 'rake'
 require 'rake/clean'
 require 'rake/testtask'
 require 'rake/rdoctask'
-require 'rake/gempackagetask'
 
 task(:default => :compile)
-
 
 CLEAN.add ["ebb_ext.{o,bundle,so,obj,pdb,lib,def,exp}"]
 CLOBBER.add ['Makefile', 'mkmf.log','doc', 'coverage']
