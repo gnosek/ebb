@@ -27,15 +27,14 @@
 
   action start_value { MARK(mark, fpc); }
   action write_value { 
-    /* this is really ugly. I KNOW - help me. */
-    if(parser->field_len == 14 && *PTR_TO(field_start) == 'C') {
-      if(parser->content_length != NULL) {
-        parser->content_length(parser->data, PTR_TO(mark), LEN(mark, fpc));
-      }
-    } else {
-      if(parser->http_field != NULL) {
-        parser->http_field(parser->data, PTR_TO(field_start), parser->field_len, PTR_TO(mark), LEN(mark, fpc));
-      }
+    if(parser->http_field != NULL) {
+      parser->http_field(parser->data, PTR_TO(field_start), parser->field_len, PTR_TO(mark), LEN(mark, fpc));
+    }
+  }
+  
+  action content_length {
+    if(parser->content_length != NULL) {
+      parser->content_length(parser->data, PTR_TO(mark), LEN(mark, fpc));
     }
   }
   
@@ -115,8 +114,9 @@
   field_value = any* >start_value %write_value;
 
   message_header = field_name ":" " "* field_value :> CRLF;
-
-  Request = Request_Line (message_header)* ( CRLF @done);
+  content_length = "Content-Length:"i " "* (field_value >mark %content_length) :> CRLF;
+  
+  Request = Request_Line (content_length | message_header)* ( CRLF @done);
 
 main := Request;
 }%%

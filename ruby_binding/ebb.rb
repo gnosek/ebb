@@ -26,11 +26,11 @@ module Ebb
     end
     
     def gets
-      raise NotImplementedError
+      raise NotImplementedError, "Fix me! Yes, you!"
     end
     
     def each
-      raise NotImplementedError
+      raise NotImplementedError, "Fix me! Yes, you!"
     end
     
     def tmp_filename
@@ -95,7 +95,6 @@ module Ebb
           client.start_writing
         end
       end
-    ensure
       stop
     end
   end

@@ -44,8 +44,6 @@
   client->env_value_lengths[client->env_size] = -1;                         \
   client->env_size += 1;                                                     
 
-#include "parser_callbacks.h"
-
 int env_has_error(ebb_client *client)
 {
   int i;
@@ -54,6 +52,90 @@ int env_has_error(ebb_client *client)
       return TRUE;
   return FALSE;
 }
+
+/** Defines common length and error messages for input length validation. */
+#define DEF_MAX_LENGTH(N,length) const size_t MAX_##N##_LENGTH = length; const char *MAX_##N##_LENGTH_ERR = "HTTP Parse Error: HTTP element " # N  " is longer than the " # length " allowed length."
+
+/** Validates the max length of given input and throws an exception if over. */
+#define VALIDATE_MAX_LENGTH(len, N) if(len > MAX_##N##_LENGTH) { env_error(client); ebb_info(MAX_##N##_LENGTH_ERR); }
+
+/* Defines the maximum allowed lengths for various input elements.*/
+DEF_MAX_LENGTH(FIELD_NAME, 256);
+DEF_MAX_LENGTH(FIELD_VALUE, 80 * 1024);
+DEF_MAX_LENGTH(REQUEST_URI, 1024 * 12);
+DEF_MAX_LENGTH(FRAGMENT, 1024); /* Don't know if this length is specified somewhere or not */
+DEF_MAX_LENGTH(REQUEST_PATH, 1024);
+DEF_MAX_LENGTH(QUERY_STRING, (1024 * 10));
+DEF_MAX_LENGTH(HEADER, (1024 * (80 + 32)));
+
+void http_field_cb(void *data, const char *field, size_t flen, const char *value, size_t vlen)
+{
+  ebb_client *client = (ebb_client*)(data);
+  VALIDATE_MAX_LENGTH(flen, FIELD_NAME);
+  VALIDATE_MAX_LENGTH(vlen, FIELD_VALUE);
+  env_add(client, field, flen, value, vlen);
+}
+
+
+void request_method_cb(void *data, const char *at, size_t length)
+{
+  ebb_client *client = (ebb_client*)(data);
+  env_add_const(client, EBB_REQUEST_METHOD, at, length);
+}
+
+
+void request_uri_cb(void *data, const char *at, size_t length)
+{
+  ebb_client *client = (ebb_client*)(data);
+  VALIDATE_MAX_LENGTH(length, REQUEST_URI);
+  env_add_const(client, EBB_REQUEST_URI, at, length);
+}
+
+
+void fragment_cb(void *data, const char *at, size_t length)
+{
+  ebb_client *client = (ebb_client*)(data);
+  VALIDATE_MAX_LENGTH(length, FRAGMENT);
+  env_add_const(client, EBB_FRAGMENT, at, length);
+}
+
+
+void request_path_cb(void *data, const char *at, size_t length)
+{
+  ebb_client *client = (ebb_client*)(data);
+  VALIDATE_MAX_LENGTH(length, REQUEST_PATH);
+  env_add_const(client, EBB_REQUEST_PATH, at, length);
+}
+
+
+void query_string_cb(void *data, const char *at, size_t length)
+{
+  ebb_client *client = (ebb_client*)(data);
+  VALIDATE_MAX_LENGTH(length, QUERY_STRING);
+  env_add_const(client, EBB_QUERY_STRING, at, length);
+}
+
+
+void http_version_cb(void *data, const char *at, size_t length)
+{
+  ebb_client *client = (ebb_client*)(data);
+  env_add_const(client, EBB_HTTP_VERSION, at, length);
+}
+
+
+void content_length_cb(void *data, const char *at, size_t length)
+{
+  ebb_client *client = (ebb_client*)(data);
+  env_add_const(client, EBB_CONTENT_LENGTH, at, length);
+  
+  client->content_length = 0;
+  int i;
+  for(i = length-1; 0 <= i; i--)  { /* i hate c. */
+    client->content_length *= 10;
+    client->content_length += at[i] - '0';
+  }
+}
+
 
 void dispatch(ebb_client *client)
 {
@@ -279,7 +361,6 @@ void on_request( struct ev_loop *loop
   client->parser.query_string   = query_string_cb;
   client->parser.http_version   = http_version_cb;
   client->parser.content_length = content_length_cb;
-  client->parser.header_done    = header_done_cb;
   
   /* OTHER */
   client->env_size = 0;

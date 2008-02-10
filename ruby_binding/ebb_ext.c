@@ -11,6 +11,7 @@
 static VALUE cServer;
 static VALUE cClient;
 
+static VALUE global_http_prefix;
 static VALUE global_request_method;
 static VALUE global_request_uri;
 static VALUE global_fragment;
@@ -22,13 +23,23 @@ static VALUE global_server_name;
 static VALUE global_server_port;
 static VALUE global_path_info;
 static VALUE global_content_length;
+static VALUE global_gateway_interface;
+static VALUE global_gateway_interface_value;
+static VALUE global_server_protocol;
+static VALUE global_server_protocol_value;
+static VALUE global_server_software;
+static VALUE global_ebb_version;
+static VALUE global_http_host;
 
 
 /* Variables with an underscore are C-level variables */
 
 VALUE env_field(const char *field, int length)
 {
-  if(field == NULL)
+  VALUE f;
+  char *ch, *end;
+  
+  if(field == NULL) {
     switch(length) {
       case EBB_REQUEST_METHOD:  return global_request_method;
       case EBB_REQUEST_URI:     return global_request_uri;
@@ -41,14 +52,21 @@ VALUE env_field(const char *field, int length)
       case EBB_CONTENT_LENGTH:  return global_content_length;
       default: assert(FALSE); /* unknown const */
     }
-  else
-    return rb_str_new(field,length); /* TODO add prefix */
-}
-
-VALUE env_value(const char *field, int length)
-{
-  /* for now just this, but later more */
-  return rb_str_new(field,length);
+  } else {
+    f = rb_str_dup(global_http_prefix);
+    f = rb_str_buf_cat(f, field, length); 
+    
+    for(ch = RSTRING(f)->ptr, end = ch + RSTRING(f)->len; ch < end; ch++) {
+      if(*ch == '-') {
+        *ch = '_';
+      } else {
+        *ch = toupper(*ch);
+      }
+    }
+    return f;
+  }
+  assert(FALSE);
+  return Qnil;
 }
 
 VALUE client_env(VALUE client)
@@ -60,10 +78,12 @@ VALUE client_env(VALUE client)
   Data_Get_Struct(client, ebb_client, _client);
   for(i=0; i < _client->env_size; i++) {
     rb_hash_aset(hash, env_field(_client->env_fields[i], _client->env_field_lengths[i])
-                     , env_value(_client->env_values[i], _client->env_value_lengths[i])
+                     , rb_str_new(_client->env_values[i], _client->env_value_lengths[i])
                      );
   }
-  
+  rb_hash_aset(hash, global_gateway_interface, global_gateway_interface_value);
+  rb_hash_aset(hash, global_server_protocol, global_server_protocol_value);
+  rb_hash_aset(hash, global_server_software, global_ebb_version);
   rb_hash_aset(hash, global_path_info, rb_hash_aref(hash, global_request_path));
   
   return hash;
@@ -203,6 +223,7 @@ void Init_ebb_ext()
   
 /** Defines global strings in the init method. */
 #define DEF_GLOBAL(N, val)   global_##N = rb_obj_freeze(rb_str_new2(val)); rb_global_variable(&global_##N)
+  DEF_GLOBAL(http_prefix, "HTTP_");
   DEF_GLOBAL(request_method, "REQUEST_METHOD");  
   DEF_GLOBAL(request_uri, "REQUEST_URI");
   DEF_GLOBAL(fragment, "FRAGMENT");
@@ -214,6 +235,14 @@ void Init_ebb_ext()
   DEF_GLOBAL(server_port, "SERVER_PORT");
   DEF_GLOBAL(path_info, "PATH_INFO");
   DEF_GLOBAL(content_length, "HTTP_CONTENT_LENGTH");
+  
+  DEF_GLOBAL(gateway_interface, "GATEWAY_INTERFACE");
+  DEF_GLOBAL(gateway_interface_value, "CGI/1.2");
+  DEF_GLOBAL(server_protocol, "SERVER_PROTOCOL");
+  DEF_GLOBAL(server_protocol_value, "HTTP/1.1");
+  DEF_GLOBAL(http_host, "HTTP_HOST");
+  DEF_GLOBAL(ebb_version, "Ebb 0.0.1"); /* XXX Why is this defined here? */
+  DEF_GLOBAL(server_software, "SERVER_SOFTWARE");
   
   rb_define_alloc_func(cServer, server_alloc);
   rb_define_method(cServer, "init", server_init, 2);

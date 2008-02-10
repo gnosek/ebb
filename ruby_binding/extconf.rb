@@ -23,6 +23,7 @@ end
 puts %x{ cd #{here}/../src && make -f #{makefile_filename}}
 
 
+
 # Help.. what's the proper way to do this?
 $LOCAL_LIBS = '../src/*.o'
 $CPPFLAGS += " -I../src"

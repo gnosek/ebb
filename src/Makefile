@@ -21,11 +21,11 @@ EXE = ebb_test
 all: $(OBJS) $(EXE)
 
 $(EXE): $(OBJS) Makefile
-	$(CC) $(CFLAGS) $(OBJS) $@.c -o $(EXE) $(LIBS)
+	$(CC) $(CFLAGS) $(OBJS) $(LIBS) $@.c -o $(EXE) 
 
 parser.c: parser.rl
 	ragel parser.rl | rlgen-cd -G2 -o parser.c
 
 .PHONY : clean
 clean:
-	rm -f $(OBJS) $(EXE) .ruby_generated_makefile
+	rm -f $(OBJS) $(EXE) parser.c .ruby_generated_makefile

@@ -34,7 +34,7 @@ wc -l ebb.c ebb.h parser_callbacks.h ruby_binding/ebb_ext.c
 * Log levels
 * Option to listen on unix sockets instead of tcp
 * Python binding
-* Better build system - using scon (http://www.scons.org/)? 
+* Better build system - using scon? (http://www.scons.org/)
   Not autoconf.
 
 = License
