@@ -1,4 +1,5 @@
 Ebb Web Server
+Version 0.0.1
 
 = Design
 
@@ -26,13 +27,12 @@ forthcoming.
 Ebb aims to be the smallest and fastest web server possible specifically for
 doing the processing for web frameworks like Rails. 
 
-It's less than 1000 lines of C code! 
-wc -l ebb.c ebb.h parser_callbacks.h ruby_binding/ebb_ext.c
+It's less than 1000 lines of C code!
 
 = TODO, ordered
-* Put client's address into env
 * Log levels
 * Option to listen on unix sockets instead of tcp
+* ebb_merb executable
 * Python binding
 * Better build system - using scon? (http://www.scons.org/)
   Not autoconf.

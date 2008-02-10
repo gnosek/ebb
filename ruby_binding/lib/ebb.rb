@@ -1,8 +1,17 @@
 # A ruby binding to the ebb web server
 # Copyright (c) 2007 Ry Dahl <ry.d4hl@gmail.com>
 # This software is released under the "MIT License". See README file for details.
-$: << File.expand_path(File.dirname(__FILE__))
-require 'ebb_ext'
+require 'rubygems'
+require 'rack'
+
+module Ebb
+  LIBDIR = File.expand_path(File.dirname(__FILE__))
+  VERSION = %x{grep ^Version #{LIBDIR}/../../README}.split(' ').last
+end
+
+$: << Ebb::LIBDIR
+require Ebb::LIBDIR + '/../ext/ebb_ext'
+require 'daemonizable'
 
 module Ebb
   class Client
@@ -26,11 +35,11 @@ module Ebb
     end
     
     def gets
-      raise NotImplementedError, "Fix me! Yes, you!"
+      raise NotImplementedError, "Fix me, please. Yes, you!"
     end
     
     def each
-      raise NotImplementedError, "Fix me! Yes, you!"
+      raise NotImplementedError, "Fix me, please Yes, you!"
     end
     
     def tmp_filename
@@ -39,6 +48,7 @@ module Ebb
   end
   
   class Server
+    include Daemonizable
     def self.run(app, options={})
       # port must be an integer
       server = self.new(app, options)
@@ -47,8 +57,16 @@ module Ebb
     end
     
     def initialize(app, options={})
-      @host = options[:Host] || '0.0.0.0'
-      @port = (options[:Port] || 4001).to_i
+      @host = options[:host] || '0.0.0.0'
+      @port = (options[:port] || 4001).to_i
+      pid_file = options[:pid_file]
+      log_file = options[:log_file]
+      @timeout =  options[:timeout]
+
+      if options[:daemonize]
+        change_privilege options[:user], options[:group] if options[:user] && options[:group]
+        daemonize
+      end
       @app = app
       init(@host, @port)
     end
@@ -68,16 +86,11 @@ module Ebb
       
       headers.each { |k, v| client.write "#{k}: #{v}\r\n" }
       client.write "\r\n"
-      if body.kind_of?(String)
-        client.write body
-      elsif body.kind_of?(StringIO)
-        client.write body.string
-      else
-        # Not many apps use this yet so i'll hold off on streaming
-        # responses until the rest of ebb is more developed
-        # Yes, I know streaming responses are very cool.
-        raise NotImplementedError, "Unsupported body of type #{body.class}"
-      end
+      
+      # Not many apps use streaming yet so i'll hold off on that feature
+      # until the rest of ebb is more developed
+      # Yes, I know streaming responses are very cool.
+      body.each { |p| client.write p }
     end
     
     def start
@@ -138,4 +151,10 @@ module Ebb
     504  => 'Gateway Time-out', 
     505  => 'HTTP Version not supported'
   }
+end
+
+module Rack
+  module Adapter
+    autoload :Rails, 'rails_adapter'
+  end
 end
