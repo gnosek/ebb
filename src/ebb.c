@@ -254,7 +254,6 @@ void on_readable( struct ev_loop *loop
   assert(client->server->open);
   assert(client->server->loop == loop);
   assert(&client->read_watcher == watcher);
-  assert(total_request_size >= client->read);
   
   ssize_t read = recv( client->fd
                      , client->read_buffer + client->read

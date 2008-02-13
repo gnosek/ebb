@@ -1,6 +1,5 @@
 require 'rake'
 require 'rake/gempackagetask'
-require File.dirname(__FILE__) + '/ruby_binding/lib/ebb'
 
 spec = Gem::Specification.new do |s|
   s.platform = Gem::Platform::RUBY
@@ -9,7 +8,7 @@ spec = Gem::Specification.new do |s|
   s.author = 'ry dahl'
   s.email = 'ry@tinyclouds.org'
   s.homepage = 'http://repo.or.cz/w/ebb.git'
-  s.version = Ebb::VERSION
+  s.version = '0.0.1'
   s.requirements << 'none'
   
   s.require_path = 'ruby_binding/lib'

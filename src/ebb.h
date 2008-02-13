@@ -114,6 +114,8 @@ struct ebb_server {
   char *port;
   char *address;
   
+  void *data;
+  
   void *request_cb_data;
   ebb_request_cb request_cb;
   

@@ -2,53 +2,7 @@ $: << File.expand_path(File.dirname(__FILE__) + '/..')
 
 require 'rubygems'
 require 'rack'
-
-class SimpleApp
-  @@responses = {}
-  @@count = 0
-  def call(env)
-    command = env['PATH_INFO'].split('/').last
-    if command == "test_post_length"
-      input_body = ""
-      while chunk = env['rack.input'].read(10)
-        input_body << chunk 
-      end
-      if env['HTTP_CONTENT_LENGTH'].to_i == input_body.length
-        body = "Content-Length matches input length"
-        status = 200
-      else
-        body = "Content-Length doesn't matches input length! 
-          content_length = #{env['HTTP_CONTENT_LENGTH'].to_i}
-          input_body.length = #{input_body.length}"
-        status = 500
-      end
-    elsif command =~ /periodically_slow_(\d+)$/
-      if @@count % 10 == 0
-        seconds = $1.to_i
-        sleep seconds
-      else
-        seconds = 0
-      end
-      @@count += 1
-      body = "waited #{seconds} seconds"
-    elsif command =~ /slow_(\d+)$/
-      seconds = $1.to_i
-      sleep seconds
-      status = 200
-      body = "waited #{seconds} seconds"
-    elsif command.to_i > 0
-      size = command.to_i
-      @@responses[size] ||= "C" * size
-      body = @@responses[size]
-      status = 200
-    else
-      status = 404
-      body = "Undefined url"
-    end
-    [status, {'Content-Type' => 'text/plain'}, body + "\r\n\r\n"]
-  end
-end
-
+require '../test/application'
 
 module Bytes
   def bytes
@@ -221,7 +175,7 @@ class ServerTest
     
     print "#{@name} (c=#{concurrency},wait=#{wait})  "
     $stdout.flush
-    r = %x{ab -t 5 -q -c #{concurrency} http://0.0.0.0:#{@port}/periodically_slow_#{wait}}
+    r = %x{ab -t #{wait*3} -q -c #{concurrency} http://0.0.0.0:#{@port}/periodically_slow_#{wait}}
     # Complete requests:      1000
 
     return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
@@ -283,8 +237,8 @@ $servers << ServerTest.new('evented mongrel', 4001) do
 end
 
 $servers << ServerTest.new('ebb', 4002) do
-  require 'ebb'
-  server = Ebb::Server.new(app, :Port => 4002)
+  require File.dirname(__FILE__) + '/../lib/ebb'
+  server = Ebb::Server.new(app, :port => 4002)
   server.start
 end
 

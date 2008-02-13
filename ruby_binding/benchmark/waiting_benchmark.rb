@@ -9,9 +9,9 @@ begin
   results = ServerTestResults.open(dumpfile)
   $servers.each { |s| s.start }
   sleep 3
-  [2,5,10].each do |wait|
+  [1,20,40,60,80,100].each do |c|
     $servers.rand_each do |server| 
-      if r = server.wait_trial(wait)
+      if r = server.wait_trial(2, c)
         results << r
       else
         puts "error! restarting server"

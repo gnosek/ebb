@@ -1,7 +1,3 @@
-require 'ebb'
-require 'test/unit'
-require 'net/http'
-
 class SimpleApp
   @@responses = {}
   @@count = 0
@@ -24,7 +20,9 @@ class SimpleApp
     elsif command =~ /periodically_slow_(\d+)$/
       if @@count % 10 == 0
         seconds = $1.to_i
+        #puts "sleeping #{seconds}"
         sleep seconds
+        #puts "done"
       else
         seconds = 0
       end
@@ -32,7 +30,9 @@ class SimpleApp
       body = "waited #{seconds} seconds"
     elsif command =~ /slow_(\d+)$/
       seconds = $1.to_i
+      #puts "sleeping #{seconds}"
       sleep seconds
+      #puts "done"
       status = 200
       body = "waited #{seconds} seconds"
     elsif command.to_i > 0
@@ -42,31 +42,8 @@ class SimpleApp
       status = 200
     else
       status = 404
-      body = env.inspect
+      body = "Undefined url"
     end
     [status, {'Content-Type' => 'text/plain'}, body + "\r\n\r\n"]
   end
 end
-
-class App1
-  def call(e)
-    [200, {'Content-Type' => 'text/plain'},"#{e.inspect}\r\n"]
-  end
-end
-
-server = Ebb::Server.new(SimpleApp.new, {:Port => 4001})
-server.start
-
-
-# class EbbTest < Test::Unit::TestCase
-#   
-#   def get(path)
-#     Net::HTTP.get_response(URI.parse("http://0.0.0.0:4001#{path}"))
-#   end
-#   
-#   def test_get
-#     response = get('/hello')
-#     eval response.body
-#   end
-# end
-
