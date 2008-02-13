@@ -56,7 +56,7 @@ VALUE env_field(const char *field, int length)
     f = rb_str_dup(global_http_prefix);
     f = rb_str_buf_cat(f, field, length); 
     
-    for(ch = RSTRING(f)->ptr, end = ch + RSTRING(f)->len; ch < end; ch++) {
+    for(ch = RSTRING_PTR(f), end = ch + RSTRING_LEN(f); ch < end; ch++) {
       if(*ch == '-') {
         *ch = '_';
       } else {
@@ -227,7 +227,11 @@ VALUE client_read_input(VALUE client, VALUE size)
   
   string = rb_str_buf_new( _size );
   nread = ebb_client_read(_client, RSTRING_PTR(string), _size);
-  RSTRING_LEN(string) = nread;
+#if RUBY_VERSION_CODE < 190
+  R_STRING(string)->len = nread;
+#else
+  rb_str_set_len(string, nread);
+#endif
   
   if(nread < 0)
     rb_raise(rb_eRuntimeError,"There was a problem reading from input (bad tmp file?)");

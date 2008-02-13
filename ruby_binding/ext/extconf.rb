@@ -28,5 +28,7 @@ puts %x{ cd #{ebb_dir} && make -f #{makefile_filename}}
 # Help.. what's the proper way to do this?
 $LOCAL_LIBS = "#{ebb_dir}/*.o"
 $CPPFLAGS += " -I#{ebb_dir}"
+$defs << "-DRUBY_VERSION_CODE=#{RUBY_VERSION.gsub(/\D/, '')}"
+
 
 create_makefile("ebb_ext")
