@@ -228,7 +228,7 @@ VALUE client_read_input(VALUE client, VALUE size)
   string = rb_str_buf_new( _size );
   nread = ebb_client_read(_client, RSTRING_PTR(string), _size);
 #if RUBY_VERSION_CODE < 190
-  R_STRING(string)->len = nread;
+  RSTRING(string)->len = nread;
 #else
   rb_str_set_len(string, nread);
 #endif
