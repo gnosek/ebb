@@ -158,6 +158,7 @@ void dispatch(ebb_client *client)
   server->request_cb(client, server->request_cb_data);
 }
 
+
 void ebb_on_timeout( struct ev_loop *loop
                    , ev_timer *watcher
                    , int revents

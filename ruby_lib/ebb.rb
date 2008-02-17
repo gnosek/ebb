@@ -1,8 +1,8 @@
 # A ruby binding to the ebb web server
 # Copyright (c) 2007 Ry Dahl <ry.d4hl@gmail.com>
 # This software is released under the "MIT License". See README file for details.
-#require 'rubygems'
-#require 'rack'
+require 'rubygems'
+require 'rack'
 
 module Ebb
   LIBDIR = File.expand_path(File.dirname(__FILE__))
@@ -14,7 +14,7 @@ require 'daemonizable'
 
 module Ebb
   class Client
-    attr_reader :upload_filename
+    attr_reader :env, :upload_filename
     
     def env
       @env.update(
@@ -67,8 +67,6 @@ module Ebb
         daemonize
       end
       @app = app
-      @workers = ThreadGroup.new
-      @running = false
       init(@host, @port)
     end
     
@@ -96,24 +94,24 @@ module Ebb
       else
         body.each { |p| client.write p }
       end
+      client.finished
     end
     
     def start
-      trap('INT')  { stop }
-      trap('TERM') { stop }
+      trap('INT')  { @running = false }
+      trap('TERM') { @running = false }
+      really_start
       @running = true
-      
-      process_connections do |client|
-        t = Thread.new(client) do |client|
+      while process_connections and @running
+        unless @waiting_clients.empty?
+          if $debug and  @waiting_clients.length > 1
+            puts "#{@waiting_clients.length} waiting clients"
+          end
+          client = @waiting_clients.shift
           process_client(client)
-          client.start_writing
         end
-        @workers.add(t)
       end
-    end
-    
-    def working?
-      not @workers.list.empty?
+      stop
     end
   end
   
