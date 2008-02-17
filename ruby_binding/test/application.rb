@@ -1,9 +1,53 @@
+DIR = File.dirname(__FILE__)
+
+def fib(n)
+  return 1 if n <= 1
+  fib(n-1) + fib(n-2)
+end
+
+def wait(seconds)
+  n = (seconds / 0.01).to_i
+  n.times do 
+    sleep(0.01)
+    #File.read(DIR + '/yahoo.html') 
+  end
+end
+
 class SimpleApp
   @@responses = {}
-  @@count = 0
+  
+  def initialize
+    @count = 0
+  end
+  
   def call(env)
-    command = env['PATH_INFO'].split('/').last
-    if command == "test_post_length"
+    commands = env['PATH_INFO'].split('/')
+    
+    @count += 1
+    if commands.include?('periodical_activity') and @count % 10 != 1
+      return [200, {'Content-Type'=>'text/plain'}, "quick response!\r\n"]
+    end
+    
+    if commands.include?('fibonacci')
+      n = commands.last.to_i
+      raise "fibonacci called with n <= 0" if n <= 0
+      body = (1..n).to_a.map { |i| fib(i).to_s }.join(' ')
+      status = 200
+    
+    elsif commands.include?('wait')
+      n = commands.last.to_i
+      raise "wait called with n <= 0" if n <= 0
+      wait(n)
+      body = "waited about #{n} seconds"
+      status = 200
+    
+    elsif commands.include?('bytes')
+      n = commands.last.to_i
+      raise "bytes called with n <= 0" if n <= 0
+      body = @@responses[n] || "C"*n
+      status = 200
+      
+    elsif commands.include?('test_post_length')
       input_body = ""
       while chunk = env['rack.input'].read(10)
         input_body << chunk 
@@ -17,33 +61,12 @@ class SimpleApp
           input_body.length = #{input_body.length}"
         status = 500
       end
-    elsif command =~ /periodically_slow_(\d+)$/
-      if @@count % 10 == 0
-        seconds = $1.to_i
-        #puts "sleeping #{seconds}"
-        sleep seconds
-        #puts "done"
-      else
-        seconds = 0
-      end
-      @@count += 1
-      body = "waited #{seconds} seconds"
-    elsif command =~ /slow_(\d+)$/
-      seconds = $1.to_i
-      #puts "sleeping #{seconds}"
-      sleep seconds
-      #puts "done"
-      status = 200
-      body = "waited #{seconds} seconds"
-    elsif command.to_i > 0
-      size = command.to_i
-      @@responses[size] ||= "C" * size
-      body = @@responses[size]
-      status = 200
+    
     else
       status = 404
       body = "Undefined url"
     end
+    
     [status, {'Content-Type' => 'text/plain'}, body + "\r\n\r\n"]
   end
 end

@@ -150,7 +150,7 @@ class ServerTest
     
     print "#{@name} (c=#{concurrency},s=#{size})  "
     $stdout.flush
-    r = %x{ab -t 3 -q -c #{concurrency} http://0.0.0.0:#{@port}/#{size}}
+    r = %x{ab -t 3 -q -c #{concurrency} http://0.0.0.0:#{@port}/bytes/#{size}}
     # Complete requests:      1000
 
     return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
@@ -175,7 +175,7 @@ class ServerTest
     
     print "#{@name} (c=#{concurrency},wait=#{wait})  "
     $stdout.flush
-    r = %x{ab -t #{wait*3} -q -c #{concurrency} http://0.0.0.0:#{@port}/periodically_slow_#{wait}}
+    r = %x{ab -t #{wait*3} -q -c #{concurrency} http://0.0.0.0:#{@port}/periodical_activity/wait/#{wait}}
     # Complete requests:      1000
 
     return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
