@@ -2,15 +2,18 @@
  * Copyright (c) 2007 Ry Dahl <ry.d4hl@gmail.com>
  * This software is released under the "MIT License". See README file for details.
  */
+#ifndef ebb_h
+#define ebb_h
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <glib.h>
-#include <ev.h>
+
+#define EV_STANDALONE 1
+#include "ev.h"
+
 #include "parser.h"
 
-#ifndef ebb_h
-#define ebb_h
 
 typedef struct ebb_server ebb_server;
 typedef struct ebb_client ebb_client;

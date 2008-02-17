@@ -11,7 +11,7 @@ begin
   sleep 3
   [1,20,40,60,80,100].each do |c|
     $servers.rand_each do |server| 
-      if r = server.wait_trial(2, c)
+      if r = server.wait_trial(15, c)
         results << r
       else
         puts "error! restarting server"

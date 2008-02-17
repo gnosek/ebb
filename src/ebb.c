@@ -17,7 +17,9 @@
 
 #include <pthread.h>
 #include <glib.h>
-#include <ev.h>
+
+#define EV_STANDALONE 1
+#include "../libev/ev.c"
 
 #include "parser.h"
 #include "ebb.h"

@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-require File.dirname(__FILE__) + '/../lib/ebb'
+require File.dirname(__FILE__) + '/../ruby_lib/ebb'
 require 'optparse'
 
 options = {
@@ -41,7 +41,7 @@ opts = OptionParser.new do |opts|
   end
 
   opts.on_tail('-v', '--version', "Show version") do
-    puts "Ebb " + Ebb::VERSION
+    puts "Ebb 0.0.1"
     exit
   end
 

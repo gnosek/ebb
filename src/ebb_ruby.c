@@ -5,8 +5,11 @@
 
 #include <ruby.h>
 #include <assert.h>
-#include <ebb.h>
-#include <ev.h>
+
+#include "../src/ebb.h"
+
+#define EV_STANDALONE 1
+#include "../libev/ev.h"
 
 static VALUE cServer;
 static VALUE cClient;

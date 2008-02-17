@@ -6,11 +6,10 @@
 
 module Ebb
   LIBDIR = File.expand_path(File.dirname(__FILE__))
-  VERSION = %x{grep ^Version #{LIBDIR}/../../README}.split(' ').last
 end
 
 $: << Ebb::LIBDIR
-require Ebb::LIBDIR + '/../ext/ebb_ext'
+require Ebb::LIBDIR + '/../src/ebb_ext'
 require 'daemonizable'
 
 module Ebb

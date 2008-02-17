@@ -1,4 +1,5 @@
-####### Edit me ########################################
+# Stand alone Makefile
+# Not used when compiling from ruby binding
 
 GLIB_CFLAGS = `pkg-config --cflags glib-2.0`
 GLIB_LIBS   = `pkg-config --libs glib-2.0`
@@ -6,8 +7,6 @@ GLIB_LIBS   = `pkg-config --libs glib-2.0`
 LIBEV_PREFIX = /opt/libev-2.01
 LIBEV_CFLAGS = -I$(LIBEV_PREFIX)/include 
 LIBEV_LIBS   = -L$(LIBEV_PREFIX)/lib -lev 
-
-########################################################
 
 CC = gcc
 CFLAGS = -g -Wall $(GLIB_CFLAGS) $(LIBEV_CFLAGS) # -DDEBUG

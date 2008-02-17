@@ -2,7 +2,7 @@ $: << File.expand_path(File.dirname(__FILE__) + '/..')
 
 require 'rubygems'
 require 'rack'
-require '../test/application'
+require 'application'
 
 module Bytes
   def bytes
@@ -175,7 +175,7 @@ class ServerTest
     
     print "#{@name} (c=#{concurrency},wait=#{wait})  "
     $stdout.flush
-    r = %x{ab -t #{wait*3} -q -c #{concurrency} http://0.0.0.0:#{@port}/periodical_activity/wait/#{wait}}
+    r = %x{ab -t #{wait*3} -q -c #{concurrency} http://0.0.0.0:#{@port}/periodical_activity/fibonacci/#{wait}}
     # Complete requests:      1000
 
     return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
@@ -237,7 +237,7 @@ $servers << ServerTest.new('evented mongrel', 4001) do
 end
 
 $servers << ServerTest.new('ebb', 4002) do
-  require File.dirname(__FILE__) + '/../lib/ebb'
+  require File.dirname(__FILE__) + '/../ruby_lib/ebb'
   server = Ebb::Server.new(app, :port => 4002)
   server.start
 end
