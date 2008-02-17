@@ -1,6 +1,5 @@
-$: << File.expand_path(File.dirname(__FILE__)) 
-require  '../ruby_lib/ebb'
-require 'application'
+require  File.dirname(__FILE__) + '/../ruby_lib/ebb'
+require File.dirname(__FILE__) + '/application'
 
 
 

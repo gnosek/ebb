@@ -5,11 +5,8 @@
 
 #include <ruby.h>
 #include <assert.h>
-
-#include "../src/ebb.h"
-
-#define EV_STANDALONE 1
-#include "../libev/ev.h"
+#include <ebb.h>
+#include <ev.h>
 
 static VALUE cServer;
 static VALUE cClient;
@@ -100,54 +97,26 @@ VALUE client_new(ebb_client *_client)
   
   rb_iv_set(client, "@env", client_env(client));
   rb_iv_set(client, "@upload_filename", rb_str_new2(_client->upload_file_filename));
+  rb_iv_set(client, "@write_buffer", rb_ary_new());
   return client;
 }
 
-ev_idle idle_watcher;
+void request_cb(ebb_client *_client, void *data)
+{
+  VALUE server = (VALUE)data;
+  VALUE waiting_clients;
+  VALUE client = client_new(_client);
+  
+  waiting_clients = rb_iv_get(server, "@waiting_clients");
+  rb_ary_push(waiting_clients, client);
+}
 
 VALUE server_alloc(VALUE self)
 {
   ebb_server *_server = ebb_server_alloc();
   VALUE server = Qnil;
   server = Data_Wrap_Struct(cServer, 0, ebb_server_free, _server);
-  
   return server; 
-}
-
-static void idle_cb (struct ev_loop *loop, struct ev_idle *watcher, int revents)
-{
-  ebb_server *_server = (ebb_server*)watcher->data;
-  VALUE server = (VALUE)_server->data;
-  VALUE workers, list;
-  
-  workers = rb_iv_get(server, "@workers");
-  list = rb_funcall(workers, rb_intern("list"), 0);
-  
-  //printf("len %d \n ", RARRAY_LEN(list));
-  
-  if(0 < RARRAY_LEN(list))
-    rb_thread_schedule();
-  else
-    ev_idle_stop(loop, watcher);
-}
-
-void attach_idle_watcher(ebb_server *_server)
-{
-  if(FALSE == ev_is_active(&idle_watcher)) {
-    idle_watcher.data = (void*)_server;
-    ev_idle_init (&idle_watcher, idle_cb);
-    ev_idle_start (_server->loop, &idle_watcher);
-  }
-}
-
-void request_cb(ebb_client *_client, void *data)
-{
-  VALUE server = (VALUE)data;
-  VALUE client = client_new(_client);
-
-  attach_idle_watcher(_client->server);
-  rb_yield(client);
-  //rb_thread_schedule();
 }
 
 VALUE server_init(VALUE server, VALUE host, VALUE port)
@@ -156,29 +125,34 @@ VALUE server_init(VALUE server, VALUE host, VALUE port)
   ebb_server *_server;
   
   Data_Get_Struct(server, ebb_server, _server);
-  
   ebb_server_init(_server, loop, StringValuePtr(host), FIX2INT(port), request_cb, (void*)server);
-  _server->data = (void*)server;
   return Qnil;
 }
 
+VALUE server_start(VALUE server)
+{
+  ebb_server *_server;
+  
+  Data_Get_Struct(server, ebb_server, _server);
+  rb_iv_set(server, "@waiting_clients", rb_ary_new());
+  ebb_server_start(_server);
+  return Qnil;
+}
 
 VALUE server_process_connections(VALUE server)
 {
   ebb_server *_server;
+  VALUE host, port;
+  
   Data_Get_Struct(server, ebb_server, _server);
-  struct ev_loop *loop = _server->loop;
-  
-  ebb_server_start(_server);
-  attach_idle_watcher(_server);
   //ev_loop(_server->loop, EVLOOP_NONBLOCK);
-  //ev_loop(_server->loop, EVLOOP_ONESHOT);
-  
-  
-  ev_loop(loop, 0);
-  
-  
-  return Qnil;
+  ev_loop(_server->loop, EVLOOP_ONESHOT);
+  /* XXX: Need way to know when the loop is finished...
+   * should return true or false */
+  if(_server->open)
+    return Qtrue;
+  else
+    return Qfalse;
 }
 
 VALUE server_stop(VALUE server)
@@ -186,7 +160,6 @@ VALUE server_stop(VALUE server)
   ebb_server *_server;
   Data_Get_Struct(server, ebb_server, _server);
   ebb_server_stop(_server);
-  ev_unloop(_server->loop, EVUNLOOP_ALL);
   return Qnil;
 }
 
@@ -278,9 +251,10 @@ void Init_ebb_ext()
   rb_define_alloc_func(cServer, server_alloc);
   rb_define_method(cServer, "init", server_init, 2);
   rb_define_method(cServer, "process_connections", server_process_connections, 0);
+  rb_define_method(cServer, "really_start", server_start, 0);
   rb_define_method(cServer, "stop", server_stop, 0);
   
   rb_define_method(cClient, "write", client_write, 1);
-  rb_define_method(cClient, "start_writing", client_start_writing, 0);
+  rb_define_method(cClient, "finished", client_start_writing, 0);
   rb_define_method(cClient, "read_input", client_read_input, 1);
 }
