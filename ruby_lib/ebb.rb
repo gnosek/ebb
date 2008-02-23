@@ -48,10 +48,6 @@ module Ebb
     def each
       raise NotImplementedError, "Fix me, please Yes, you!"
     end
-    
-    def tmp_filename
-      @client.upload_filename
-    end
   end
   
   class Server
@@ -115,7 +111,7 @@ module Ebb
           process_client(client)
         end
       end
-      deafen
+      unlisten
     end
   end
   

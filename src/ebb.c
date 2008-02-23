@@ -313,7 +313,7 @@ void on_request( struct ev_loop *loop
   
   if(EV_ERROR & revents) {
     ebb_info("on_request() got error event, closing server.");
-    ebb_server_deafen(server);
+    ebb_server_unlisten(server);
     return;
   }
   
@@ -438,7 +438,7 @@ error:
 
 void ebb_server_free(ebb_server *server)
 {
-  ebb_server_deafen(server);
+  ebb_server_unlisten(server);
   
   int i; 
   for(i=0; i < EBB_MAX_CLIENTS; i++)
@@ -453,7 +453,7 @@ void ebb_server_free(ebb_server *server)
 }
 
 
-void ebb_server_deafen(ebb_server *server)
+void ebb_server_unlisten(ebb_server *server)
 {
   if(server->open) {
     ebb_info("Stopping Ebb server");
@@ -482,7 +482,7 @@ void ebb_server_listen(ebb_server *server)
               );
   if(r < 0) {
     ebb_error("Failed to bind to %s %s", server->address, server->port);
-    ebb_server_deafen(server);
+    ebb_server_unlisten(server);
     return;
   }
   r = listen(server->fd, EBB_MAX_CLIENTS);

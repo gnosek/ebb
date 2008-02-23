@@ -103,7 +103,7 @@ void ebb_server_init( ebb_server *server
                     );
 void ebb_server_free(ebb_server*);
 void ebb_server_listen(ebb_server*);
-void ebb_server_deafen(ebb_server*);
+void ebb_server_unlisten(ebb_server*);
 
 struct ebb_server {
   EBB_TCP_COMMON

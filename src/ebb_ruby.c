@@ -160,11 +160,11 @@ VALUE server_process_connections(VALUE server)
     return Qfalse;
 }
 
-VALUE server_deafen(VALUE server)
+VALUE server_unlisten(VALUE server)
 {
   ebb_server *_server;
   Data_Get_Struct(server, ebb_server, _server);
-  ebb_server_deafen(_server);
+  ebb_server_unlisten(_server);
   return Qnil;
 }
 
@@ -250,7 +250,7 @@ void Init_ebb_ext()
   rb_define_method(cServer, "init", server_init, 2);
   rb_define_method(cServer, "process_connections", server_process_connections, 0);
   rb_define_method(cServer, "listen", server_listen, 0);
-  rb_define_method(cServer, "deafen", server_deafen, 0);
+  rb_define_method(cServer, "unlisten", server_unlisten, 0);
   
   rb_define_method(cClient, "initialize", client_init, 1);
   rb_define_method(cClient, "write", client_write, 1);
