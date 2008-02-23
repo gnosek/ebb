@@ -17,7 +17,7 @@ spec = Gem::Specification.new do |s|
   s.author = 'ry dahl'
   s.email = 'ry@tinyclouds.org'
   s.homepage = 'http://repo.or.cz/w/ebb.git'
-  s.version = '0.0.1'
+  s.version = File.read(File.dirname(__FILE__) + "/VERSION").gsub(/\s/,'')
   s.requirements << 'none'
   
   s.require_path = 'ruby_lib'
@@ -25,7 +25,7 @@ spec = Gem::Specification.new do |s|
   s.bindir = 'bin'
   s.executables = %w(ebb_rails)
   
-  s.files = ['{src,libev,benchmark,ruby_lib}/*.(rb|c|h)', 'bin/ebb_rails','README']
+  s.files = FileList.new ['{src,libev,benchmark,ruby_lib}/*.(rb|c|h)', 'bin/ebb_rails','README']
 end
 
 Rake::GemPackageTask.new(spec) do |pkg|

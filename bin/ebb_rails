@@ -41,7 +41,7 @@ opts = OptionParser.new do |opts|
   end
 
   opts.on_tail('-v', '--version', "Show version") do
-    puts "Ebb 0.0.1"
+    puts "Ebb #{Ebb::VERSION}"
     exit
   end
 

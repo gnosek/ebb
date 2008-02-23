@@ -3,6 +3,7 @@
 # This software is released under the "MIT License". See README file for details.
 module Ebb
   LIBDIR = File.expand_path(File.dirname(__FILE__))
+  VERSION = File.read(LIBDIR + "/../VERSION").gsub(/\s/,'')
 end
 
 $: << Ebb::LIBDIR
@@ -12,7 +13,7 @@ require 'daemonizable'
 module Ebb
   class Client
     BASE_ENV = {
-      'SERVER_SOFTWARE' => 'Ebb 0.0.1',
+      'SERVER_SOFTWARE' => "Ebb #{Ebb::VERSION}",
       'SERVER_PROTOCOL' => 'HTTP/1.1',
       'GATEWAY_INTERFACE' => 'CGI/1.2',
       'rack.version' => [0, 1],
@@ -24,9 +25,9 @@ module Ebb
     
     def env
       @env ||= begin
-        @env = @ebb_env.update(BASE_ENV)
-        @env['rack.input'] = Input.new(self)
-        @env
+        env = @ebb_env.update(BASE_ENV)
+        env['rack.input'] = Input.new(self)
+        env
       end
     end
   end
