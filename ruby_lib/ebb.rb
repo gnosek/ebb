@@ -60,18 +60,19 @@ module Ebb
     end
     
     def initialize(app, options={})
-      @host = options[:host] || '0.0.0.0'
+      #@host = options[:host] || '0.0.0.0'
+      @socket = options[:socket]
       @port = (options[:port] || 4001).to_i
       pid_file = options[:pid_file]
       log_file = options[:log_file]
       @timeout =  options[:timeout]
-
+      
       if options[:daemonize]
         change_privilege options[:user], options[:group] if options[:user] && options[:group]
         daemonize
       end
       @app = app
-      init(@host, @port)
+      init
     end
     
     def process_client(client)
@@ -100,7 +101,16 @@ module Ebb
     
     def start
       trap('INT')  { @running = false }
-      listen
+      
+      if @socket
+        listen_on_socket(@socket) or raise "Problem listening on socket #{@socket}"
+        puts "Listening on socket #{@socket}"
+      else
+        listen_on_port(@port) or raise "Problem listening on port #{@port}"
+        puts "Listening on port #{@port}"
+      end
+      @waiting_clients = []
+      
       @running = true
       while process_connections and @running
         unless @waiting_clients.empty?

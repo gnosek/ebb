@@ -110,31 +110,38 @@ VALUE server_alloc(VALUE self)
 }
 
 
-VALUE server_init(VALUE server, VALUE host, VALUE port)
+VALUE server_init(VALUE server)
 {
   struct ev_loop *loop = ev_default_loop (0);
   ebb_server *_server;
   
   Data_Get_Struct(server, ebb_server, _server);
-  ebb_server_init(_server, loop, StringValuePtr(host), FIX2INT(port), request_cb, (void*)server);
-  
-  
-
+  ebb_server_init(_server, loop, request_cb, (void*)server);
   return Qnil;
 }
 
-VALUE server_listen(VALUE server)
+
+VALUE server_listen_on_port(VALUE server, VALUE port)
 {
   ebb_server *_server;
-  
   Data_Get_Struct(server, ebb_server, _server);
-  rb_iv_set(server, "@waiting_clients", rb_ary_new());
-  ebb_server_listen(_server);
-  return Qnil;
+  int r = ebb_server_listen_on_port(_server, FIX2INT(port));
+  return r < 0 ? Qfalse : Qtrue;
 }
+
+
+VALUE server_listen_on_socket(VALUE server, VALUE socketpath)
+{
+  ebb_server *_server;
+  Data_Get_Struct(server, ebb_server, _server);
+  int r = ebb_server_listen_on_socket(_server, StringValuePtr(socketpath));
+  return r < 0 ? Qfalse : Qtrue;
+}
+
 
 static void
 oneshot_timeout (struct ev_loop *loop, struct ev_timer *w, int revents) {;}
+
 
 VALUE server_process_connections(VALUE server)
 {
@@ -247,9 +254,10 @@ void Init_ebb_ext()
   DEF_GLOBAL(http_host, "HTTP_HOST");
   
   rb_define_alloc_func(cServer, server_alloc);
-  rb_define_method(cServer, "init", server_init, 2);
+  rb_define_method(cServer, "init", server_init, 0);
   rb_define_method(cServer, "process_connections", server_process_connections, 0);
-  rb_define_method(cServer, "listen", server_listen, 0);
+  rb_define_method(cServer, "listen_on_port", server_listen_on_port, 1);
+  rb_define_method(cServer, "listen_on_socket", server_listen_on_socket, 1);
   rb_define_method(cServer, "unlisten", server_unlisten, 0);
   
   rb_define_method(cClient, "initialize", client_init, 1);

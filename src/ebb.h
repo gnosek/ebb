@@ -94,32 +94,25 @@ struct ebb_client {
 typedef void (*ebb_request_cb)(ebb_client*, void*);
 
 ebb_server* ebb_server_alloc();
+void ebb_server_free(ebb_server*);
 void ebb_server_init( ebb_server *server
                     , struct ev_loop *loop
-                    , char *address
-                    , int port
                     , ebb_request_cb request_cb
                     , void *request_cb_data
                     );
-void ebb_server_free(ebb_server*);
-void ebb_server_listen(ebb_server*);
+int ebb_server_listen_on_port(ebb_server*, const int port);
+int ebb_server_listen_on_socket(ebb_server*, const char *socketpath);
 void ebb_server_unlisten(ebb_server*);
 
 struct ebb_server {
   EBB_TCP_COMMON
-  struct hostent *dns_info;
   char *port;
-  char *address;
-  
-  void *data;
-  
+  char *socketpath;
+  ev_io request_watcher;
+  ebb_client clients[EBB_MAX_CLIENTS];
+  struct ev_loop *loop;
   void *request_cb_data;
   ebb_request_cb request_cb;
-  
-  ev_io *request_watcher;
-  struct ev_loop *loop;
-  
-  ebb_client clients[EBB_MAX_CLIENTS];
 };
 
 #endif ebb_h

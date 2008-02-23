@@ -6,6 +6,8 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
+#include <sys/un.h>
 #include <netdb.h>
 
 #include <stdio.h>
@@ -26,6 +28,9 @@
 
 #define min(a,b) (a < b ? a : b)
 #define ramp(a) (a > 0 ? a : 0)
+
+static int server_socket(const int port);
+static int server_socket_unix(const char *path, int access_mask);
 
 #define env_add(client, field,flen,value,vlen)                              \
   client->env_fields[client->env_size] = field;                             \
@@ -147,14 +152,14 @@ void dispatch(ebb_client *client)
     return;
   
   /* Set the env variables */
-  env_add_const(client, EBB_SERVER_NAME
-                      , server->address
-                      , strlen(server->address)
-                      );
-  env_add_const(client, EBB_SERVER_PORT
-                      , server->port
-                      , strlen(server->port)
-                      );
+  // env_add_const(client, EBB_SERVER_NAME
+  //                     , server->address
+  //                     , strlen(server->address)
+  //                     );
+  // env_add_const(client, EBB_SERVER_PORT
+  //                     , server->port
+  //                     , strlen(server->port)
+  //                     );
   server->request_cb(client, server->request_cb_data);
 }
 
@@ -309,20 +314,18 @@ void on_request( struct ev_loop *loop
   ebb_server *server = (ebb_server*)(watcher->data);
   assert(server->open);
   assert(server->loop == loop);
-  assert(server->request_watcher == watcher);
+  assert(&server->request_watcher == watcher);
   
   if(EV_ERROR & revents) {
     ebb_info("on_request() got error event, closing server.");
     ebb_server_unlisten(server);
     return;
   }
-  
   /* Now we're going to initialize the client 
    * and set up her callbacks for read and write
    * the client won't get passed back to the user, however,
    * until the request is complete and parsed.
    */
-  
   int i;
   ebb_client *client;
   /* Get next availible peer */
@@ -352,7 +355,7 @@ void on_request( struct ev_loop *loop
   int flags = fcntl(client->fd, F_GETFL, 0);
   assert(0 <= fcntl(client->fd, F_SETFL, flags | O_NONBLOCK));
   
-  /* INITIALIZE inline http_parser */
+  /* INITIALIZE http_parser */
   http_parser_init(&(client->parser));
   client->parser.data = client;
   client->parser.http_field     = http_field_cb;
@@ -390,45 +393,22 @@ ebb_server* ebb_server_alloc()
   return server;
 }
 
+
 void ebb_server_init( ebb_server *server
                     , struct ev_loop *loop
-                    , char *address
-                    , int port
                     , ebb_request_cb request_cb
                     , void *request_cb_data
                     )
 {
-  /* SETUP SOCKET STUFF */
-  server->fd = socket(PF_INET, SOCK_STREAM, 0);
-  int r = fcntl(server->fd, F_SETFL, O_NONBLOCK);
-  assert(r >= 0);
-  
   int i;
   for(i=0; i < EBB_MAX_CLIENTS; i++)
     server->clients[i].write_buffer = g_string_new("");
-  
-  int flags = 1;
-  r = setsockopt(server->fd, SOL_SOCKET, SO_REUSEADDR, &flags, sizeof(flags));
-  assert(r >= 0);
-  server->sockaddr.sin_family = AF_INET;
-  server->sockaddr.sin_port = htons(port);
-  server->address = strdup(address); /* TODO: use looked up address? */
-  server->port = malloc(sizeof(char)*8); /* for easy access to the port */
-  sprintf(server->port, "%d", port);
-  server->dns_info = gethostbyname(address);
-  if (!(server->dns_info && server->dns_info->h_addr)) {
-    ebb_error("Could not look up hostname %s", address);
-    goto error;
-  }
-  memmove( &(server->sockaddr.sin_addr)
-         , server->dns_info->h_addr
-         , sizeof(struct in_addr)
-         );
   
   server->request_cb = request_cb;
   server->request_cb_data = request_cb_data;
   server->loop = loop;
   server->open = FALSE;
+  server->fd = -1;
   return;
 error:
   ebb_server_free(server);
@@ -445,10 +425,8 @@ void ebb_server_free(ebb_server *server)
     g_string_free(server->clients[i].write_buffer, TRUE);
   if(server->port)
     free(server->port);
-  if(server->address)
-    free(server->address);
-  if(server->dns_info)
-    free(server->dns_info);
+  if(server->socketpath)
+    free(server->socketpath);
   free(server);
 }
 
@@ -461,14 +439,9 @@ void ebb_server_unlisten(ebb_server *server)
     ebb_client *client;
     for(i=0; i < EBB_MAX_CLIENTS; i++)
       ebb_client_close(client);
-    
-    if(server->request_watcher) {
-      ev_io_stop(server->loop, server->request_watcher);
-      free(server->request_watcher);
-      server->request_watcher = NULL;
-    }
-    
-    close(server->fd);
+    ev_io_stop(server->loop, &server->request_watcher);
+    if(server->fd > 0)
+      close(server->fd);
     server->open = FALSE;
   }
 }
@@ -476,27 +449,40 @@ void ebb_server_unlisten(ebb_server *server)
 
 void ebb_server_listen(ebb_server *server)
 {
-  int r = bind( server->fd
-              , (struct sockaddr*)&(server->sockaddr)
-              , sizeof(server->sockaddr)
-              );
-  if(r < 0) {
-    ebb_error("Failed to bind to %s %s", server->address, server->port);
-    ebb_server_unlisten(server);
-    return;
-  }
-  r = listen(server->fd, EBB_MAX_CLIENTS);
+  int r = listen(server->fd, EBB_MAX_CLIENTS);
   assert(r >= 0);
   assert(server->open == FALSE);
   server->open = TRUE;
   
-  server->request_watcher = g_new0(ev_io, 1);
-  server->request_watcher->data = server;
-  
-  ev_init (server->request_watcher, on_request);
-  ev_io_set (server->request_watcher, server->fd, EV_READ | EV_ERROR);
-  ev_io_start (server->loop, server->request_watcher);
+  server->request_watcher.data = server;
+  ev_init (&server->request_watcher, on_request);
+  ev_io_set (&server->request_watcher, server->fd, EV_READ | EV_ERROR);
+  ev_io_start (server->loop, &server->request_watcher);
 }
+
+
+int ebb_server_listen_on_port(ebb_server *server, const int port)
+{
+  int fd = server_socket(port);
+  if(fd < 0) return 0;
+  server->port = malloc(sizeof(char)*8); /* for easy access to the port */
+  sprintf(server->port, "%d", port);
+  server->fd = fd;
+  ebb_server_listen(server);
+  return fd;
+}
+
+
+int ebb_server_listen_on_socket(ebb_server *server, const char *socketpath)
+{
+  int fd = server_socket_unix(socketpath, 0x700);
+  if(fd < 0) return 0;
+  server->socketpath = strdup(socketpath);
+  server->fd = fd;
+  ebb_server_listen(server);
+  return fd;
+}
+
 
 void ebb_client_close(ebb_client *client)
 {
@@ -524,6 +510,7 @@ void ebb_client_close(ebb_client *client)
     client->open = FALSE;
   }
 }
+
 
 void ebb_on_writable( struct ev_loop *loop
                     , ev_io *watcher
@@ -564,6 +551,7 @@ void ebb_on_writable( struct ev_loop *loop
     ebb_client_close(client);
 }
 
+
 void ebb_client_write(ebb_client *client, const char *data, int length)
 {
   g_string_append_len(client->write_buffer, data, length);
@@ -583,6 +571,7 @@ void ebb_client_finished( ebb_client *client)
   ev_io_set (&(client->write_watcher), client->fd, EV_WRITE | EV_ERROR);
   ev_io_start(client->server->loop, &(client->write_watcher));
 }
+
 
 /* pass an allocated buffer and the length to read. this function will try to
  * fill the buffer with that length of data read from the body of the request.
@@ -608,3 +597,115 @@ size_t ebb_client_read(ebb_client *client, char *buffer, int length)
     return read;
   }
 }
+
+/* The following socket creation routines are modified and stolen from memcached */
+
+static int server_socket(const int port) {
+    int sfd;
+    struct linger ling = {0, 0};
+    struct sockaddr_in addr;
+    int flags =1;
+    
+    if ((sfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+        perror("socket()");
+        return -1;
+    }
+    
+    if ((flags = fcntl(sfd, F_GETFL, 0)) < 0 ||
+        fcntl(sfd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        perror("setting O_NONBLOCK");
+        close(sfd);
+        return -1;
+    }
+    
+    flags = 1;
+    setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (void *)&flags, sizeof(flags));
+    setsockopt(sfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags));
+    setsockopt(sfd, SOL_SOCKET, SO_LINGER, (void *)&ling, sizeof(ling));
+    setsockopt(sfd, IPPROTO_TCP, TCP_NODELAY, (void *)&flags, sizeof(flags));
+    
+    /*
+     * the memset call clears nonstandard fields in some impementations
+     * that otherwise mess things up.
+     */
+    memset(&addr, 0, sizeof(addr));
+    
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    
+    if (bind(sfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+        perror("bind()");
+        close(sfd);
+        return -1;
+    }
+    if (listen(sfd, EBB_MAX_CLIENTS) == -1) {
+        perror("listen()");
+        close(sfd);
+        return -1;
+    }
+    return sfd;
+}
+
+
+static int server_socket_unix(const char *path, int access_mask) {
+    int sfd;
+    struct linger ling = {0, 0};
+    struct sockaddr_un addr;
+    struct stat tstat;
+    int flags =1;
+    int old_umask;
+
+    if (!path) {
+        return -1;
+    }
+    
+    if ((sfd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+        perror("socket()");
+        return -1;
+    }
+    
+    if ((flags = fcntl(sfd, F_GETFL, 0)) < 0 ||
+        fcntl(sfd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        perror("setting O_NONBLOCK");
+        close(sfd);
+        return -1;
+    }
+    
+    /*
+     * Clean up a previous socket file if we left it around
+     */
+    if (lstat(path, &tstat) == 0) {
+        if (S_ISSOCK(tstat.st_mode))
+            unlink(path);
+    }
+
+    flags = 1;
+    setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (void *)&flags, sizeof(flags));
+    setsockopt(sfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags));
+    setsockopt(sfd, SOL_SOCKET, SO_LINGER, (void *)&ling, sizeof(ling));
+
+    /*
+     * the memset call clears nonstandard fields in some impementations
+     * that otherwise mess things up.
+     */
+    memset(&addr, 0, sizeof(addr));
+
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, path);
+    old_umask=umask( ~(access_mask&0777));
+    if (bind(sfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+        perror("bind()");
+        close(sfd);
+        umask(old_umask);
+        return -1;
+    }
+    umask(old_umask);
+    if (listen(sfd, 1024) == -1) {
+        perror("listen()");
+        close(sfd);
+        return -1;
+    }
+    return sfd;
+}
+
