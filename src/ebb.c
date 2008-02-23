@@ -313,7 +313,7 @@ void on_request( struct ev_loop *loop
   
   if(EV_ERROR & revents) {
     ebb_info("on_request() got error event, closing server.");
-    ebb_server_stop(server);
+    ebb_server_deafen(server);
     return;
   }
   
@@ -438,7 +438,7 @@ error:
 
 void ebb_server_free(ebb_server *server)
 {
-  ebb_server_stop(server);
+  ebb_server_deafen(server);
   
   int i; 
   for(i=0; i < EBB_MAX_CLIENTS; i++)
@@ -453,7 +453,7 @@ void ebb_server_free(ebb_server *server)
 }
 
 
-void ebb_server_stop(ebb_server *server)
+void ebb_server_deafen(ebb_server *server)
 {
   if(server->open) {
     ebb_info("Stopping Ebb server");
@@ -474,7 +474,7 @@ void ebb_server_stop(ebb_server *server)
 }
 
 
-void ebb_server_start(ebb_server *server)
+void ebb_server_listen(ebb_server *server)
 {
   int r = bind( server->fd
               , (struct sockaddr*)&(server->sockaddr)
@@ -482,7 +482,7 @@ void ebb_server_start(ebb_server *server)
               );
   if(r < 0) {
     ebb_error("Failed to bind to %s %s", server->address, server->port);
-    ebb_server_stop(server);
+    ebb_server_deafen(server);
     return;
   }
   r = listen(server->fd, EBB_MAX_CLIENTS);
@@ -560,10 +560,8 @@ void ebb_on_writable( struct ev_loop *loop
   
   ev_timer_again(loop, &(client->timeout_watcher));
   
-  if(client->written == client->write_buffer->len) {
-    if(client->after_write_cb) client->after_write_cb(client);
+  if(client->written == client->write_buffer->len)
     ebb_client_close(client);
-  }
 }
 
 void ebb_client_write(ebb_client *client, const char *data, int length)
@@ -571,9 +569,7 @@ void ebb_client_write(ebb_client *client, const char *data, int length)
   g_string_append_len(client->write_buffer, data, length);
 }
 
-void ebb_client_start_writing( ebb_client *client
-                             , ebb_client_cb after_write_cb
-                             )
+void ebb_client_finished( ebb_client *client)
 {
   assert(client->open);
   assert(FALSE == ev_is_active(&(client->write_watcher)));
@@ -582,7 +578,6 @@ void ebb_client_start_writing( ebb_client *client
   assert(0 <= fcntl(client->fd, F_SETFL, flags | O_NONBLOCK));
   
   client->written = 0;
-  client->after_write_cb = after_write_cb;
   client->write_watcher.data = client;
   ev_init (&(client->write_watcher), ebb_on_writable);
   ev_io_set (&(client->write_watcher), client->fd, EV_WRITE | EV_ERROR);

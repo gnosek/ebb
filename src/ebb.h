@@ -38,15 +38,10 @@ typedef struct ebb_client ebb_client;
   struct sockaddr_in sockaddr;
 
 /*** Ebb Client ***/
-
-typedef void (*ebb_client_cb)(ebb_client*);
-
 void ebb_client_close(ebb_client*);
 size_t ebb_client_read(ebb_client*, char *buffer, int length);
 void ebb_client_write(ebb_client*, const char *data, int length);
-void ebb_client_start_writing( ebb_client *client
-                             , ebb_client_cb after_write_cb
-                             );
+void ebb_client_finished( ebb_client *client);
 /* User must free the GString returned from ebb_client_read_input */
 GString* ebb_client_read_input(ebb_client *client, ssize_t size);
 
@@ -74,7 +69,6 @@ struct ebb_client {
   ev_io write_watcher;
   GString *write_buffer;
   size_t written;
-  ebb_client_cb after_write_cb;
   
   void *data;
   
@@ -108,8 +102,8 @@ void ebb_server_init( ebb_server *server
                     , void *request_cb_data
                     );
 void ebb_server_free(ebb_server*);
-void ebb_server_start(ebb_server*);
-void ebb_server_stop(ebb_server*);
+void ebb_server_listen(ebb_server*);
+void ebb_server_deafen(ebb_server*);
 
 struct ebb_server {
   EBB_TCP_COMMON

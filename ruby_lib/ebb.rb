@@ -1,9 +1,6 @@
 # A ruby binding to the ebb web server
 # Copyright (c) 2007 Ry Dahl <ry.d4hl@gmail.com>
 # This software is released under the "MIT License". See README file for details.
-require 'rubygems'
-require 'rack'
-
 module Ebb
   LIBDIR = File.expand_path(File.dirname(__FILE__))
 end
@@ -14,12 +11,23 @@ require 'daemonizable'
 
 module Ebb
   class Client
-    attr_reader :env, :upload_filename
+    BASE_ENV = {
+      'SERVER_SOFTWARE' => 'Ebb 0.0.1',
+      'SERVER_PROTOCOL' => 'HTTP/1.1',
+      'GATEWAY_INTERFACE' => 'CGI/1.2',
+      'rack.version' => [0, 1],
+      'rack.errors' => STDERR,
+      'rack.multithread'  => false,
+      'rack.multiprocess' => false,
+      'rack.run_once' => false
+    }.freeze
     
     def env
-      @env.update(
-        'rack.input' => Input.new(self)
-      )
+      @env ||= begin
+        @env = @ebb_env.update(BASE_ENV)
+        @env['rack.input'] = Input.new(self)
+        @env
+      end
     end
   end
   
@@ -70,9 +78,6 @@ module Ebb
       init(@host, @port)
     end
     
-    # Called by the C library on each request.
-    # env is a hash containing all the variables of the request
-    # client is a TCPSocket
     def process_client(client)
       status, headers, body = @app.call(client.env)
       
@@ -99,8 +104,7 @@ module Ebb
     
     def start
       trap('INT')  { @running = false }
-      trap('TERM') { @running = false }
-      really_start
+      listen
       @running = true
       while process_connections and @running
         unless @waiting_clients.empty?
@@ -111,7 +115,7 @@ module Ebb
           process_client(client)
         end
       end
-      stop
+      deafen
     end
   end
   

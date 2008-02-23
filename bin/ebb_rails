@@ -18,8 +18,8 @@ opts = OptionParser.new do |opts|
   opts.separator ""
   opts.separator "Server options:"
 
-  opts.on("-o", "--host HOST", "listen on HOST (default: 0.0.0.0)")      { |host| options[:Hort] = host }
-  opts.on("-p", "--port PORT", "use PORT (default: 3000)")               { |port| options[:Port] = port }
+  opts.on("-h", "--host HOST", "listen on HOST (default: 0.0.0.0)")      { |host| options[:hort] = host }
+  opts.on("-p", "--port PORT", "use PORT (default: 3000)")               { |port| options[:port] = port }
   opts.on("-e", "--env ENV", "Rails environment (default: development)") { |env| options[:env] = env }
   opts.on("-c", "--chdir PATH", "Rails root dir (default: current dir)") { |dir| options[:root] = dir }
   opts.on("-d", "--daemonize", "Daemonize")                              { options[:daemonize] = true }

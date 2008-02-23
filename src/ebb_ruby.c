@@ -23,12 +23,6 @@ static VALUE global_server_name;
 static VALUE global_server_port;
 static VALUE global_path_info;
 static VALUE global_content_length;
-static VALUE global_gateway_interface;
-static VALUE global_gateway_interface_value;
-static VALUE global_server_protocol;
-static VALUE global_server_protocol_value;
-static VALUE global_server_software;
-static VALUE global_ebb_version;
 static VALUE global_http_host;
 
 
@@ -69,35 +63,31 @@ VALUE env_field(const char *field, int length)
   return Qnil;
 }
 
-VALUE client_env(VALUE client)
+VALUE client_env(ebb_client *_client)
 {
-  ebb_client *_client;
   VALUE hash = rb_hash_new();
   int i;
-  
-  Data_Get_Struct(client, ebb_client, _client);
+  /* This client->env_fields, client->env_value structure is pretty hacky
+   * and a bit hard to follow. Look at the #defines at the top of ebb.c to
+   * see what they are doing. Basically it's a list of (ptr,length) pairs
+   * for both a field and value
+   */
   for(i=0; i < _client->env_size; i++) {
     rb_hash_aset(hash, env_field(_client->env_fields[i], _client->env_field_lengths[i])
                      , rb_str_new(_client->env_values[i], _client->env_value_lengths[i])
                      );
   }
-  rb_hash_aset(hash, global_gateway_interface, global_gateway_interface_value);
-  rb_hash_aset(hash, global_server_protocol, global_server_protocol_value);
-  rb_hash_aset(hash, global_server_software, global_ebb_version);
   rb_hash_aset(hash, global_path_info, rb_hash_aref(hash, global_request_path));
-  
   return hash;
 }
 
 VALUE client_new(ebb_client *_client)
 {
   VALUE client = Data_Wrap_Struct(cClient, 0, 0, _client);
-  
   _client->data = (void*)client;
-  
-  rb_iv_set(client, "@env", client_env(client));
-  rb_iv_set(client, "@upload_filename", rb_str_new2(_client->upload_file_filename));
-  rb_iv_set(client, "@write_buffer", rb_ary_new());
+  // if(_client->upload_file_filename)
+  //   rb_iv_set(client, "@upload_filename", rb_str_new2(_client->upload_file_filename));
+  rb_iv_set(client, "@ebb_env", client_env(_client));
   return client;
 }
 
@@ -119,6 +109,7 @@ VALUE server_alloc(VALUE self)
   return server; 
 }
 
+
 VALUE server_init(VALUE server, VALUE host, VALUE port)
 {
   struct ev_loop *loop = ev_default_loop (0);
@@ -126,18 +117,24 @@ VALUE server_init(VALUE server, VALUE host, VALUE port)
   
   Data_Get_Struct(server, ebb_server, _server);
   ebb_server_init(_server, loop, StringValuePtr(host), FIX2INT(port), request_cb, (void*)server);
+  
+  
+
   return Qnil;
 }
 
-VALUE server_start(VALUE server)
+VALUE server_listen(VALUE server)
 {
   ebb_server *_server;
   
   Data_Get_Struct(server, ebb_server, _server);
   rb_iv_set(server, "@waiting_clients", rb_ary_new());
-  ebb_server_start(_server);
+  ebb_server_listen(_server);
   return Qnil;
 }
+
+static void
+oneshot_timeout (struct ev_loop *loop, struct ev_timer *w, int revents) {;}
 
 VALUE server_process_connections(VALUE server)
 {
@@ -145,21 +142,29 @@ VALUE server_process_connections(VALUE server)
   VALUE host, port;
   
   Data_Get_Struct(server, ebb_server, _server);
-  //ev_loop(_server->loop, EVLOOP_NONBLOCK);
+  
+  
+  ev_timer timeout;
+  ev_timer_init (&timeout, oneshot_timeout, 0.5, 0.);
+  ev_timer_start (_server->loop, &timeout);
+   
   ev_loop(_server->loop, EVLOOP_ONESHOT);
   /* XXX: Need way to know when the loop is finished...
    * should return true or false */
+   
+  ev_timer_stop(_server->loop, &timeout);
+  
   if(_server->open)
     return Qtrue;
   else
     return Qfalse;
 }
 
-VALUE server_stop(VALUE server)
+VALUE server_deafen(VALUE server)
 {
   ebb_server *_server;
   Data_Get_Struct(server, ebb_server, _server);
-  ebb_server_stop(_server);
+  ebb_server_deafen(_server);
   return Qnil;
 }
 
@@ -173,12 +178,11 @@ VALUE client_write(VALUE client, VALUE string)
   return Qnil;
 }
 
-VALUE client_start_writing(VALUE client)
+VALUE client_finished(VALUE client)
 {
   ebb_client *_client;
-  
   Data_Get_Struct(client, ebb_client, _client);
-  ebb_client_start_writing(_client, NULL);
+  ebb_client_finished(_client);
   return Qnil;
 }
 
@@ -218,6 +222,7 @@ VALUE client_read_input(VALUE client, VALUE size)
   return string;
 }
 
+VALUE client_init(VALUE self, VALUE something) {return self;}
 
 void Init_ebb_ext()
 {
@@ -225,8 +230,8 @@ void Init_ebb_ext()
   cServer = rb_define_class_under(mEbb, "Server", rb_cObject);
   cClient = rb_define_class_under(mEbb, "Client", rb_cObject);
   
-/** Defines global strings in the init method. */
-#define DEF_GLOBAL(N, val)   global_##N = rb_obj_freeze(rb_str_new2(val)); rb_global_variable(&global_##N)
+  /** Defines global strings in the init method. */
+#define DEF_GLOBAL(N, val) global_##N = rb_obj_freeze(rb_str_new2(val)); rb_global_variable(&global_##N)
   DEF_GLOBAL(http_prefix, "HTTP_");
   DEF_GLOBAL(request_method, "REQUEST_METHOD");  
   DEF_GLOBAL(request_uri, "REQUEST_URI");
@@ -239,22 +244,19 @@ void Init_ebb_ext()
   DEF_GLOBAL(server_port, "SERVER_PORT");
   DEF_GLOBAL(path_info, "PATH_INFO");
   DEF_GLOBAL(content_length, "HTTP_CONTENT_LENGTH");
-  
-  DEF_GLOBAL(gateway_interface, "GATEWAY_INTERFACE");
-  DEF_GLOBAL(gateway_interface_value, "CGI/1.2");
-  DEF_GLOBAL(server_protocol, "SERVER_PROTOCOL");
-  DEF_GLOBAL(server_protocol_value, "HTTP/1.1");
   DEF_GLOBAL(http_host, "HTTP_HOST");
-  DEF_GLOBAL(ebb_version, "Ebb 0.0.1"); /* XXX Why is this defined here? */
-  DEF_GLOBAL(server_software, "SERVER_SOFTWARE");
   
   rb_define_alloc_func(cServer, server_alloc);
   rb_define_method(cServer, "init", server_init, 2);
   rb_define_method(cServer, "process_connections", server_process_connections, 0);
-  rb_define_method(cServer, "really_start", server_start, 0);
-  rb_define_method(cServer, "stop", server_stop, 0);
+  rb_define_method(cServer, "listen", server_listen, 0);
+  rb_define_method(cServer, "deafen", server_deafen, 0);
   
+  rb_define_method(cClient, "initialize", client_init, 1);
   rb_define_method(cClient, "write", client_write, 1);
-  rb_define_method(cClient, "finished", client_start_writing, 0);
   rb_define_method(cClient, "read_input", client_read_input, 1);
+  rb_define_method(cClient, "finished", client_finished, 0);
+  
+  rb_define_method(cClient, "read_input", client_read_input, 1);
+  
 }
