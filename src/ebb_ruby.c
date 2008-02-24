@@ -63,31 +63,12 @@ VALUE env_field(const char *field, int length)
   return Qnil;
 }
 
-VALUE client_env(ebb_client *_client)
-{
-  VALUE hash = rb_hash_new();
-  int i;
-  /* This client->env_fields, client->env_value structure is pretty hacky
-   * and a bit hard to follow. Look at the #defines at the top of ebb.c to
-   * see what they are doing. Basically it's a list of (ptr,length) pairs
-   * for both a field and value
-   */
-  for(i=0; i < _client->env_size; i++) {
-    rb_hash_aset(hash, env_field(_client->env_fields[i], _client->env_field_lengths[i])
-                     , rb_str_new(_client->env_values[i], _client->env_value_lengths[i])
-                     );
-  }
-  rb_hash_aset(hash, global_path_info, rb_hash_aref(hash, global_request_path));
-  return hash;
-}
-
 VALUE client_new(ebb_client *_client)
 {
   VALUE client = Data_Wrap_Struct(cClient, 0, 0, _client);
   _client->data = (void*)client;
   // if(_client->upload_file_filename)
   //   rb_iv_set(client, "@upload_filename", rb_str_new2(_client->upload_file_filename));
-  rb_iv_set(client, "@ebb_env", client_env(_client));
   return client;
 }
 
@@ -110,7 +91,7 @@ VALUE server_alloc(VALUE self)
 }
 
 
-VALUE server_init(VALUE server)
+VALUE server_initialize(VALUE x, VALUE server)
 {
   struct ev_loop *loop = ev_default_loop (0);
   ebb_server *_server;
@@ -121,7 +102,7 @@ VALUE server_init(VALUE server)
 }
 
 
-VALUE server_listen_on_port(VALUE server, VALUE port)
+VALUE server_listen_on_port(VALUE x, VALUE server, VALUE port)
 {
   ebb_server *_server;
   Data_Get_Struct(server, ebb_server, _server);
@@ -130,7 +111,7 @@ VALUE server_listen_on_port(VALUE server, VALUE port)
 }
 
 
-VALUE server_listen_on_socket(VALUE server, VALUE socketpath)
+VALUE server_listen_on_socket(VALUE x, VALUE server, VALUE socketpath)
 {
   ebb_server *_server;
   Data_Get_Struct(server, ebb_server, _server);
@@ -143,7 +124,7 @@ static void
 oneshot_timeout (struct ev_loop *loop, struct ev_timer *w, int revents) {;}
 
 
-VALUE server_process_connections(VALUE server)
+VALUE server_process_connections(VALUE x, VALUE server)
 {
   ebb_server *_server;
   VALUE host, port;
@@ -167,7 +148,7 @@ VALUE server_process_connections(VALUE server)
     return Qfalse;
 }
 
-VALUE server_unlisten(VALUE server)
+VALUE server_unlisten(VALUE x, VALUE server)
 {
   ebb_server *_server;
   Data_Get_Struct(server, ebb_server, _server);
@@ -175,7 +156,29 @@ VALUE server_unlisten(VALUE server)
   return Qnil;
 }
 
-VALUE client_write(VALUE client, VALUE string)
+
+VALUE client_env(VALUE x, VALUE client)
+{
+  ebb_client *_client;
+  VALUE hash = rb_hash_new();
+  int i;  
+  Data_Get_Struct(client, ebb_client, _client);
+  /* This client->env_fields, client->env_value structure is pretty hacky
+   * and a bit hard to follow. Look at the #defines at the top of ebb.c to
+   * see what they are doing. Basically it's a list of (ptr,length) pairs
+   * for both a field and value
+   */
+  for(i=0; i < _client->env_size; i++) {
+    rb_hash_aset(hash, env_field(_client->env_fields[i], _client->env_field_lengths[i])
+                     , rb_str_new(_client->env_values[i], _client->env_value_lengths[i])
+                     );
+  }
+  rb_hash_aset(hash, global_path_info, rb_hash_aref(hash, global_request_path));
+  return hash;
+}
+
+
+VALUE client_write(VALUE x, VALUE client, VALUE string)
 {
   ebb_client *_client;
   int written;
@@ -185,7 +188,7 @@ VALUE client_write(VALUE client, VALUE string)
   return Qnil;
 }
 
-VALUE client_finished(VALUE client)
+VALUE client_finished(VALUE x, VALUE client)
 {
   ebb_client *_client;
   Data_Get_Struct(client, ebb_client, _client);
@@ -193,16 +196,7 @@ VALUE client_finished(VALUE client)
   return Qnil;
 }
 
-VALUE client_close(VALUE client)
-{
-  ebb_client *_client;
-
-  Data_Get_Struct(client, ebb_client, _client);
-  ebb_client_close(_client);
-  return Qnil;
-}
-
-VALUE client_read_input(VALUE client, VALUE size)
+VALUE client_read_input(VALUE x, VALUE client, VALUE size)
 {
   ebb_client *_client;
   GString *_string;
@@ -229,13 +223,11 @@ VALUE client_read_input(VALUE client, VALUE size)
   return string;
 }
 
-VALUE client_init(VALUE self, VALUE something) {return self;}
 
 void Init_ebb_ext()
 {
   VALUE mEbb = rb_define_module("Ebb");
-  cServer = rb_define_class_under(mEbb, "Server", rb_cObject);
-  cClient = rb_define_class_under(mEbb, "Client", rb_cObject);
+  VALUE mFFI = rb_define_module_under(mEbb, "FFI");
   
   /** Defines global strings in the init method. */
 #define DEF_GLOBAL(N, val) global_##N = rb_obj_freeze(rb_str_new2(val)); rb_global_variable(&global_##N)
@@ -253,18 +245,18 @@ void Init_ebb_ext()
   DEF_GLOBAL(content_length, "HTTP_CONTENT_LENGTH");
   DEF_GLOBAL(http_host, "HTTP_HOST");
   
+  cServer = rb_define_class_under(mEbb, "Server", rb_cObject);
   rb_define_alloc_func(cServer, server_alloc);
-  rb_define_method(cServer, "init", server_init, 0);
-  rb_define_method(cServer, "process_connections", server_process_connections, 0);
-  rb_define_method(cServer, "listen_on_port", server_listen_on_port, 1);
-  rb_define_method(cServer, "listen_on_socket", server_listen_on_socket, 1);
-  rb_define_method(cServer, "unlisten", server_unlisten, 0);
+  rb_define_singleton_method(mFFI, "server_initialize", server_initialize, 1);
+  rb_define_singleton_method(mFFI, "server_process_connections", server_process_connections, 1);
+  rb_define_singleton_method(mFFI, "server_listen_on_port", server_listen_on_port, 2);
+  rb_define_singleton_method(mFFI, "server_listen_on_socket", server_listen_on_socket, 2);
+  rb_define_singleton_method(mFFI, "server_unlisten", server_unlisten, 1);
   
-  rb_define_method(cClient, "initialize", client_init, 1);
-  rb_define_method(cClient, "write", client_write, 1);
-  rb_define_method(cClient, "read_input", client_read_input, 1);
-  rb_define_method(cClient, "finished", client_finished, 0);
-  
-  rb_define_method(cClient, "read_input", client_read_input, 1);
-  
+  cClient = rb_define_class_under(mEbb, "Client", rb_cObject);
+  rb_define_singleton_method(mFFI, "client_write", client_write, 2);
+  rb_define_singleton_method(mFFI, "client_read_input", client_read_input, 2);
+  rb_define_singleton_method(mFFI, "client_finished", client_finished, 1);
+  rb_define_singleton_method(mFFI, "client_env", client_env, 1);
+
 }

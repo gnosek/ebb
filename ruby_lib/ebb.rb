@@ -25,10 +25,18 @@ module Ebb
     
     def env
       @env ||= begin
-        env = @ebb_env.update(BASE_ENV)
+        env = FFI::client_env(self).update(BASE_ENV)
         env['rack.input'] = Input.new(self)
         env
       end
+    end
+    
+    def finished
+      FFI::client_finished(self)
+    end
+    
+    def write(data)
+      FFI::client_write(self, data)
     end
   end
   
@@ -39,7 +47,7 @@ module Ebb
     end
     
     def read(len = 1)
-      @client.read_input(len)
+      FFI::client_read_input(@client, len)
     end
     
     def gets
@@ -61,7 +69,6 @@ module Ebb
     end
     
     def initialize(app, options={})
-      #@host = options[:host] || '0.0.0.0'
       @socket = options[:socket]
       @port = (options[:port] || 4001).to_i
       pid_file = options[:pid_file]
@@ -73,11 +80,17 @@ module Ebb
         daemonize
       end
       @app = app
-      init
+      FFI::server_initialize(self)
     end
     
     def process_client(client)
-      status, headers, body = @app.call(client.env)
+      begin
+        status, headers, body = @app.call(client.env)
+      rescue
+        status = 500
+        headers = {'Content-Type' => 'text/plain'}
+        body = HTTP_STATUS_CODES[status]
+      end
       
       client.write "HTTP/1.1 %d %s\r\n" % [status, HTTP_STATUS_CODES[status]]
       
@@ -104,16 +117,14 @@ module Ebb
       trap('INT')  { @running = false }
       
       if @socket
-        listen_on_socket(@socket) or raise "Problem listening on socket #{@socket}"
-        puts "Listening on socket #{@socket}"
+        FFI::server_listen_on_socket(self, @socket) or raise "Problem listening on socket #{@socket}"
       else
-        listen_on_port(@port) or raise "Problem listening on port #{@port}"
-        puts "Listening on port #{@port}"
+        FFI::server_listen_on_port(self, @port) or raise "Problem listening on port #{@port}"
       end
       @waiting_clients = []
       
       @running = true
-      while process_connections and @running
+      while FFI::server_process_connections(self) and @running
         unless @waiting_clients.empty?
           if $debug and  @waiting_clients.length > 1
             puts "#{@waiting_clients.length} waiting clients"
@@ -122,7 +133,7 @@ module Ebb
           process_client(client)
         end
       end
-      unlisten
+      FFI::server_unlisten(self)
     end
   end
   
@@ -164,7 +175,7 @@ module Ebb
     503  => 'Service Unavailable', 
     504  => 'Gateway Time-out', 
     505  => 'HTTP Version not supported'
-  }
+  }.freeze
 end
 
 module Rack

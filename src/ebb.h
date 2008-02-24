@@ -28,7 +28,7 @@ typedef struct ebb_client ebb_client;
 #define ebb_debug(str, ...)  \
   g_log(EBB_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, str, ## __VA_ARGS__);
 
-#define EBB_BUFFERSIZE (16*1024)
+#define EBB_BUFFERSIZE (14*1024)
 #define EBB_MAX_CLIENTS 200
 #define EBB_TIMEOUT 30.0
 #define EBB_MAX_ENV 100

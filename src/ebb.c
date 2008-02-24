@@ -141,6 +141,7 @@ void content_length_cb(void *data, const char *at, size_t length)
     client->content_length *= 10;
     client->content_length += at[i] - '0';
   }
+  // ebb_debug("content length read: %d", client->content_length);
 }
 
 
@@ -164,10 +165,7 @@ void dispatch(ebb_client *client)
 }
 
 
-void ebb_on_timeout( struct ev_loop *loop
-                   , ev_timer *watcher
-                   , int revents
-                   )
+void on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
 {
   ebb_client *client = (ebb_client*)(watcher->data);
   
@@ -216,6 +214,8 @@ void* read_body_into_file(void *_client)
     written += r;
   }
   
+  // ebb_debug("wrote request header to file. written: %d, content_length: %d", written, client->content_length);
+  
   int bufsize = 5*1024;
   char buffer[bufsize];
   size_t received;
@@ -242,7 +242,7 @@ void* read_body_into_file(void *_client)
     written += received;
   }
   rewind(tmpfile);
-  
+  // ebb_debug("%d bytes written to file %s", written, client->upload_file_filename);
   return NULL;
 error:
   ebb_client_close(client);
@@ -382,7 +382,7 @@ void on_request( struct ev_loop *loop
   ev_io_start(server->loop, &client->read_watcher);
   
   client->timeout_watcher.data = client;  
-  ev_timer_init(&client->timeout_watcher, ebb_on_timeout, EBB_TIMEOUT, EBB_TIMEOUT);
+  ev_timer_init(&client->timeout_watcher, on_timeout, EBB_TIMEOUT, EBB_TIMEOUT);
   ev_timer_start(server->loop, &client->timeout_watcher);
 }
 
@@ -440,8 +440,11 @@ void ebb_server_unlisten(ebb_server *server)
     for(i=0; i < EBB_MAX_CLIENTS; i++)
       ebb_client_close(client);
     ev_io_stop(server->loop, &server->request_watcher);
-    if(server->fd > 0)
+    if(server->fd > 0) {
       close(server->fd);
+      if(server->socketpath)
+        unlink(server->socketpath);
+    }
     server->open = FALSE;
   }
 }
@@ -475,7 +478,7 @@ int ebb_server_listen_on_port(ebb_server *server, const int port)
 
 int ebb_server_listen_on_socket(ebb_server *server, const char *socketpath)
 {
-  int fd = server_socket_unix(socketpath, 0x700);
+  int fd = server_socket_unix(socketpath, 0755);
   if(fd < 0) return 0;
   server->socketpath = strdup(socketpath);
   server->fd = fd;
@@ -512,16 +515,13 @@ void ebb_client_close(ebb_client *client)
 }
 
 
-void ebb_on_writable( struct ev_loop *loop
-                    , ev_io *watcher
-                    , int revents
-                    )
+void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   ebb_client *client = (ebb_client*)(watcher->data);
   ssize_t sent;
   
   if(EV_ERROR & revents) {
-    ebb_error("ebb_on_writable() got error event, closing peer");
+    ebb_error("on_client_writable() got error event, closing peer");
     return;
   }
   
@@ -557,6 +557,7 @@ void ebb_client_write(ebb_client *client, const char *data, int length)
   g_string_append_len(client->write_buffer, data, length);
 }
 
+
 void ebb_client_finished( ebb_client *client)
 {
   assert(client->open);
@@ -567,7 +568,7 @@ void ebb_client_finished( ebb_client *client)
   
   client->written = 0;
   client->write_watcher.data = client;
-  ev_init (&(client->write_watcher), ebb_on_writable);
+  ev_init (&(client->write_watcher), on_client_writable);
   ev_io_set (&(client->write_watcher), client->fd, EV_WRITE | EV_ERROR);
   ev_io_start(client->server->loop, &(client->write_watcher));
 }
