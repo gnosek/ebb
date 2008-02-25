@@ -182,21 +182,27 @@ VALUE client_read(VALUE x, VALUE client, VALUE size)
 {
   ebb_client *_client;
   VALUE string;
-  int _size = FIX2INT(size);
-  
+  int nread, _size = FIX2INT(size);
   Data_Get_Struct(client, ebb_client, _client);
   
   string = rb_str_buf_new( _size );
-  int nread = ebb_client_read(_client, RSTRING_PTR(string), _size);
+  
+  do {
+    nread = ebb_client_read(_client, RSTRING_PTR(string), _size);
+  } while(nread == -2 && rb_io_wait_readable(_client->fd) == Qtrue);
+  
+  if(nread == -1) {
+    rb_raise(rb_eRuntimeError,"There was a problem reading from request input");
+    return Qnil;
+  } else if(nread == -3) {
+    return Qnil;
+  }
+  
 #if RUBY_VERSION_CODE < 190
   RSTRING(string)->len = nread;
 #else
   rb_str_set_len(string, nread);
 #endif
-  if(nread < 0)
-    rb_raise(rb_eRuntimeError,"There was a problem reading from input (bad tmp file?)");
-  if(nread == 0)
-    return Qnil;
   return string;
 }
 

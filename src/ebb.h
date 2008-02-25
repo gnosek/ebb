@@ -39,7 +39,7 @@ typedef struct ebb_client ebb_client;
 
 /*** Ebb Client ***/
 void ebb_client_close(ebb_client*);
-size_t ebb_client_read_request(ebb_client *client, char *buffer, int length);
+int ebb_client_read(ebb_client *client, char *buffer, int length);
 void ebb_client_write(ebb_client*, const char *data, int length);
 void ebb_client_finished( ebb_client *client);
 
@@ -61,16 +61,13 @@ struct ebb_client {
   http_parser parser;
   
   char request_buffer[EBB_BUFFERSIZE];
-  size_t read;
   ev_io read_watcher;
-  char *request_body_head;
-  int request_body_head_size;
-  size_t read_from_body;
+  size_t nread_head, nread_body;
   
   int content_length;
   
   ev_io write_watcher;
-  GString *write_buffer;
+  GString *response_buffer;
   size_t written;
   
   void *data;

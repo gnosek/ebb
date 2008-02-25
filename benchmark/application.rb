@@ -49,7 +49,7 @@ class SimpleApp
       
     elsif commands.include?('test_post_length')
       input_body = ""
-      while chunk = env['rack.input'].read(1024)
+      while chunk = env['rack.input'].read(512)
         input_body << chunk 
       end
       if env['HTTP_CONTENT_LENGTH'].to_i == input_body.length
