@@ -28,7 +28,7 @@ typedef struct ebb_client ebb_client;
 #define ebb_debug(str, ...)  \
   g_log(EBB_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, str, ## __VA_ARGS__);
 
-#define EBB_BUFFERSIZE (14*1024)
+#define EBB_BUFFERSIZE (2*1024)
 #define EBB_MAX_CLIENTS 200
 #define EBB_TIMEOUT 30.0
 #define EBB_MAX_ENV 100
@@ -39,11 +39,9 @@ typedef struct ebb_client ebb_client;
 
 /*** Ebb Client ***/
 void ebb_client_close(ebb_client*);
-size_t ebb_client_read(ebb_client*, char *buffer, int length);
+size_t ebb_client_read_request(ebb_client *client, char *buffer, int length);
 void ebb_client_write(ebb_client*, const char *data, int length);
 void ebb_client_finished( ebb_client *client);
-/* User must free the GString returned from ebb_client_read_input */
-GString* ebb_client_read_input(ebb_client *client, ssize_t size);
 
 enum { EBB_REQUEST_METHOD
      , EBB_REQUEST_URI
@@ -62,9 +60,14 @@ struct ebb_client {
   ebb_server *server;
   http_parser parser;
   
-  char read_buffer[EBB_BUFFERSIZE];
+  char request_buffer[EBB_BUFFERSIZE];
   size_t read;
   ev_io read_watcher;
+  char *request_body_head;
+  int request_body_head_size;
+  size_t read_from_body;
+  
+  int content_length;
   
   ev_io write_watcher;
   GString *write_buffer;
@@ -72,12 +75,6 @@ struct ebb_client {
   
   void *data;
   
-  char upload_file_filename[200];
-  FILE *upload_file;
-  int content_length;
-  
-  char *request_body;
-  int nread_from_body;
   
   ev_timer timeout_watcher;
   

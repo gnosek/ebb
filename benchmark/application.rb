@@ -49,7 +49,7 @@ class SimpleApp
       
     elsif commands.include?('test_post_length')
       input_body = ""
-      while chunk = env['rack.input'].read(10)
+      while chunk = env['rack.input'].read(1024)
         input_body << chunk 
       end
       if env['HTTP_CONTENT_LENGTH'].to_i == input_body.length
@@ -69,4 +69,16 @@ class SimpleApp
     
     [status, {'Content-Type' => 'text/plain'}, body + "\r\n\r\n"]
   end
+end
+
+
+if $0 == __FILE__
+  require DIR + '/../ruby_lib/ebb'
+  require 'rubygems'
+  require 'ruby-debug'
+  Debugger.start
+  
+  server = Ebb::Server.new(SimpleApp.new, :port => 4001)
+  puts "Ebb started on http://0.0.0.0:4001/"
+  server.start
 end

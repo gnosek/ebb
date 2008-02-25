@@ -5,6 +5,7 @@
 
 #include <ruby.h>
 #include <assert.h>
+#include <fcntl.h>
 #include <ebb.h>
 #include <ev.h>
 
@@ -67,8 +68,7 @@ VALUE client_new(ebb_client *_client)
 {
   VALUE client = Data_Wrap_Struct(cClient, 0, 0, _client);
   _client->data = (void*)client;
-  // if(_client->upload_file_filename)
-  //   rb_iv_set(client, "@upload_filename", rb_str_new2(_client->upload_file_filename));
+  rb_iv_set(client, "@content_length", INT2FIX(_client->content_length));
   return client;
 }
 
@@ -178,15 +178,37 @@ VALUE client_env(VALUE x, VALUE client)
 }
 
 
+VALUE client_read(VALUE x, VALUE client, VALUE size)
+{
+  ebb_client *_client;
+  VALUE string;
+  int _size = FIX2INT(size);
+  
+  Data_Get_Struct(client, ebb_client, _client);
+  
+  string = rb_str_buf_new( _size );
+  int nread = ebb_client_read(_client, RSTRING_PTR(string), _size);
+#if RUBY_VERSION_CODE < 190
+  RSTRING(string)->len = nread;
+#else
+  rb_str_set_len(string, nread);
+#endif
+  if(nread < 0)
+    rb_raise(rb_eRuntimeError,"There was a problem reading from input (bad tmp file?)");
+  if(nread == 0)
+    return Qnil;
+  return string;
+}
+
+
 VALUE client_write(VALUE x, VALUE client, VALUE string)
 {
   ebb_client *_client;
-  int written;
-  
   Data_Get_Struct(client, ebb_client, _client);
   ebb_client_write(_client, RSTRING_PTR(string), RSTRING_LEN(string));
   return Qnil;
 }
+
 
 VALUE client_finished(VALUE x, VALUE client)
 {
@@ -194,33 +216,6 @@ VALUE client_finished(VALUE x, VALUE client)
   Data_Get_Struct(client, ebb_client, _client);
   ebb_client_finished(_client);
   return Qnil;
-}
-
-VALUE client_read_input(VALUE x, VALUE client, VALUE size)
-{
-  ebb_client *_client;
-  GString *_string;
-  VALUE string;
-  int _size = FIX2INT(size);
-  int nread;
-  
-  Data_Get_Struct(client, ebb_client, _client);
-  
-  string = rb_str_buf_new( _size );
-  nread = ebb_client_read(_client, RSTRING_PTR(string), _size);
-#if RUBY_VERSION_CODE < 190
-  RSTRING(string)->len = nread;
-#else
-  rb_str_set_len(string, nread);
-#endif
-  
-  if(nread < 0)
-    rb_raise(rb_eRuntimeError,"There was a problem reading from input (bad tmp file?)");
-  
-  if(nread == 0)
-    return Qnil;
-  
-  return string;
 }
 
 
@@ -254,8 +249,8 @@ void Init_ebb_ext()
   rb_define_singleton_method(mFFI, "server_unlisten", server_unlisten, 1);
   
   cClient = rb_define_class_under(mEbb, "Client", rb_cObject);
+  rb_define_singleton_method(mFFI, "client_read", client_read, 2);
   rb_define_singleton_method(mFFI, "client_write", client_write, 2);
-  rb_define_singleton_method(mFFI, "client_read_input", client_read_input, 2);
   rb_define_singleton_method(mFFI, "client_finished", client_finished, 1);
   rb_define_singleton_method(mFFI, "client_env", client_env, 1);
 

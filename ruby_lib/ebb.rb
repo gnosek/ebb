@@ -26,7 +26,7 @@ module Ebb
     def env
       @env ||= begin
         env = FFI::client_env(self).update(BASE_ENV)
-        env['rack.input'] = Input.new(self)
+        env['rack.input'] = RequestBody.new(self)
         env
       end
     end
@@ -40,22 +40,21 @@ module Ebb
     end
   end
   
-  class Input
-    CHUNKSIZE = 4*1024
+  class RequestBody
     def initialize(client)
       @client = client
     end
     
-    def read(len = 1)
-      FFI::client_read_input(@client, len)
+    def read(len)
+      FFI::client_read(@client, len)
     end
     
     def gets
-      raise NotImplementedError, "Fix me, please. Yes, you!"
+      raise NotImplementedError
     end
     
     def each
-      raise NotImplementedError, "Fix me, please Yes, you!"
+      raise NotImplementedError
     end
   end
   
@@ -87,9 +86,10 @@ module Ebb
       begin
         status, headers, body = @app.call(client.env)
       rescue
+        raise if $DEBUG
         status = 500
         headers = {'Content-Type' => 'text/plain'}
-        body = HTTP_STATUS_CODES[status]
+        body = "Internal Server Error\n"
       end
       
       client.write "HTTP/1.1 %d %s\r\n" % [status, HTTP_STATUS_CODES[status]]
@@ -126,7 +126,7 @@ module Ebb
       @running = true
       while FFI::server_process_connections(self) and @running
         unless @waiting_clients.empty?
-          if $debug and  @waiting_clients.length > 1
+          if $DEBUG and  @waiting_clients.length > 1
             puts "#{@waiting_clients.length} waiting clients"
           end
           client = @waiting_clients.shift

@@ -1,6 +1,9 @@
 require  File.dirname(__FILE__) + '/../ruby_lib/ebb'
 require 'test/unit'
 require 'net/http'
+require 'rubygems'
+require 'ruby-debug'
+Debugger.start
 
 
 class EbbTest < Test::Unit::TestCase
@@ -20,7 +23,6 @@ class EbbTest < Test::Unit::TestCase
   def get(path)
     Net::HTTP.get_response(URI.parse("http://0.0.0.0:4044#{path}"))
   end
-  
   
   def post(path, data)
     Net::HTTP.post_form(URI.parse("http://0.0.0.0:4044#{path}"), data)
@@ -77,12 +79,12 @@ class EbbTest < Test::Unit::TestCase
   def test_small_posts
     [1,10,1000].each do |i|
       response = post("/test_post_length", 'C'*i)
-      assert_equal 200, response.code.to_i
+      assert_equal 200, response.code.to_i, response.body
     end
   end
-  # 
+  
   # def test_large_post
-  #   response = post("/test_post_length", 'C'*1024*15)
+  #   response = post("/test_post_length", 'C'*1024*10)
   #   assert_equal 200, response.code.to_i, response.body
   # end
 end
