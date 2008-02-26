@@ -62,16 +62,16 @@ struct ebb_client {
   
   char request_buffer[EBB_BUFFERSIZE];
   ev_io read_watcher;
-  size_t nread_head, nread_body;
+  size_t read, nread_from_body;
+  
+  char upload_file_filename[200];
+  FILE *upload_file;
   
   int content_length;
   
   ev_io write_watcher;
   GString *response_buffer;
   size_t written;
-  
-  void *data;
-  
   
   ev_timer timeout_watcher;
   

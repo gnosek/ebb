@@ -180,6 +180,78 @@ void on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
 }
 
 #define client_finished_parsing http_parser_is_finished(&client->parser)
+#define total_request_size (client->content_length + client->parser.nread)
+
+void* read_body_into_file(void *_client)
+{
+  ebb_client *client = (ebb_client*)_client;
+  static unsigned int id;
+  FILE *tmpfile;
+  
+  assert(client->open);
+  assert(client->server->open);
+  assert(client->content_length > 0);
+  assert(client_finished_parsing);
+  
+  /* set blocking socket */
+  int flags = fcntl(client->fd, F_GETFL, 0);
+  assert(0 <= fcntl(client->fd, F_SETFL, flags & ~O_NONBLOCK));
+  
+  sprintf(client->upload_file_filename, "/tmp/ebb_upload_%010d", id++);
+  tmpfile = fopen(client->upload_file_filename, "w+");
+  if(tmpfile == NULL) ebb_error("Cannot open tmpfile %s", client->upload_file_filename);
+  client->upload_file = tmpfile;
+  
+  size_t body_head_length = client->read - client->parser.nread;
+  size_t written = 0, r;
+  while(written < body_head_length) {
+    r = fwrite( client->request_buffer + sizeof(char)*(client->parser.nread + written)
+              , sizeof(char)
+              , body_head_length - written
+              , tmpfile
+              );
+    if(r <= 0) {
+      ebb_client_close(client);
+      return NULL;
+    }
+    written += r;
+  }
+  
+  // ebb_debug("wrote request header to file. written: %d, content_length: %d", written, client->content_length);
+  
+  int bufsize = 5*1024;
+  char buffer[bufsize];
+  size_t received;
+  while(written < client->content_length) {
+    received = recv(client->fd
+                   , buffer
+                   , min(client->content_length - written, bufsize)
+                   , 0
+                   );
+    if(received < 0) goto error;
+    client->read += received;
+    
+    ssize_t w = 0;
+    int rv;
+    while(w < received) {
+      rv = fwrite( buffer + w*sizeof(char)
+                 , sizeof(char)
+                 , received - w
+                 , tmpfile
+                 );
+      if(rv <= 0) goto error;
+      w += rv;
+    }
+    written += received;
+  }
+  rewind(tmpfile);
+  // ebb_debug("%d bytes written to file %s", written, client->upload_file_filename);
+  return NULL;
+error:
+  ebb_client_close(client);
+  return NULL;
+}
+
 
 void on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
 {
@@ -189,27 +261,41 @@ void on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
   assert(client->server->open);
   assert(client->server->loop == loop);
   assert(&client->read_watcher == watcher);
-  assert(FALSE == client_finished_parsing);
   
   ssize_t read = recv( client->fd
-                     , client->request_buffer + client->nread_head
-                     , EBB_BUFFERSIZE - client->nread_head - 1
+                     , client->request_buffer + client->read
+                     , EBB_BUFFERSIZE - client->read - 1 /* -1 is for making ragel happy below */
                      , 0
                      );
   if(read <= 0) goto error; /* XXX is this the right action to take for read==0 ? */
-  client->nread_head += read;  
+  client->read += read;
   ev_timer_again(loop, &client->timeout_watcher);
   
-  client->request_buffer[client->nread_head] = '\0'; /* make ragel happy */
-  http_parser_execute( &client->parser
-                     , client->request_buffer
-                     , client->nread_head
-                     , client->parser.nread
-                     );
-  if(http_parser_has_error(&client->parser)) goto error;
-  if(client_finished_parsing) {
+  if(FALSE == client_finished_parsing) {
+    client->request_buffer[client->read] = '\0'; /* make ragel happy */
+    http_parser_execute( &client->parser
+                       , client->request_buffer
+                       , client->read
+                       , client->parser.nread
+                       );
+    if(http_parser_has_error(&client->parser)) goto error;
+  }
+  
+  if(total_request_size == client->read) {
     ev_io_stop(loop, watcher);
+    client->nread_from_body = 0;
     dispatch(client);
+    return;
+  }
+  
+  if(client_finished_parsing && total_request_size > EBB_BUFFERSIZE ) {
+    /* read body into file - in a thread */
+    pthread_t thread;
+    ev_io_stop(loop, watcher);
+    assert(0 <= pthread_create(&thread, NULL, read_body_into_file, client));
+    pthread_join(thread, NULL);
+    dispatch(client);
+    return;
   }
   return;
 error:
@@ -217,11 +303,7 @@ error:
   ebb_client_close(client);
 }
 
-
-void on_request( struct ev_loop *loop
-               , ev_io *watcher
-               , int revents
-               )
+void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   ebb_server *server = (ebb_server*)(watcher->data);
   assert(server->open);
@@ -281,9 +363,9 @@ void on_request( struct ev_loop *loop
   
   /* OTHER */
   client->env_size = 0;
-  client->nread_head = client->nread_body = 0;
+  client->read = client->nread_from_body = 0;
   client->response_buffer->len = 0; /* see note in ebb_client_close */
-  client->content_length = -1;
+  client->content_length = 0;
   
   /* SETUP READ AND TIMEOUT WATCHERS */
   client->read_watcher.data = client;
@@ -404,7 +486,10 @@ void ebb_client_close(ebb_client *client)
     ev_io_stop(client->server->loop, &client->write_watcher);
     ev_timer_stop(client->server->loop, &client->timeout_watcher);
     
-    http_parser_finish(&client->parser);
+    if(client->upload_file) {
+      fclose(client->upload_file);
+      unlink(client->upload_file_filename);
+    }
     
     /* here we do not free the already allocated GString client->response_buffer
      * that we're holding the response in. we reuse it again - 
@@ -462,59 +547,6 @@ void ebb_client_write(ebb_client *client, const char *data, int length)
 }
 
 
-/* pass an allocated buffer and the length to read. this function will try to
- * fill the buffer with that length of data read from the body of the request.
- * the return value says how much was actually written.
- *
- * return length read on successful read
- * returns -1 on error
- * returns -2 if the nonblocking socket is not yet availible for reading
- * returns -3 if content_length is present and the request is finished.
- */
-int ebb_client_read(ebb_client *client, char *buffer, int length)
-{
-  int to_read, read;
-  char* body_beginning = client->request_buffer + client->parser.nread;
-  int body_beginning_size = client->nread_head - client->parser.nread;
-  
-  if(!client->open) return -1;
-  
-  assert(client->nread_body >= 0);
-  
-  assert(client_finished_parsing);
-  assert(client->parser.nread + body_beginning_size < EBB_BUFFERSIZE);
-  assert(client->parser.nread + body_beginning_size == client->nread_head);
-  
-  if(client->nread_body == client->content_length) return(-3);
-  
-  if(client->nread_body < body_beginning_size) {
-    to_read = min(length, body_beginning_size - client->nread_body);
-    assert(0 <= to_read && to_read <= length);
-    memcpy( buffer
-          , body_beginning + client->nread_body
-          , to_read
-          );
-    client->nread_body += to_read;
-    return(to_read);
-  
-  } else {
-    /* allow for requests where the content length is not mentioned. e.g.
-     * streaming posts
-     */
-    read = recv(client->fd, buffer, length, 0);
-    //ebb_info("recv(%d, buffer, %d, 0) -> %d (%s)", client->fd, length, read, strerror(errno));
-    if(read < 0) {
-      if(errno == EAGAIN) return -2;
-      ebb_warning("closing client. ebb_client_read: %s", strerror(errno));
-      ebb_client_close(client);
-      return -1;
-    }
-    client->nread_body += read;
-    return(read);
-  }
-}
-
-
 void ebb_client_finished(ebb_client *client)
 {
   assert(client->open);
@@ -537,6 +569,34 @@ void ebb_client_finished(ebb_client *client)
   ev_io_start(client->server->loop, &(client->write_watcher));
 }
 
+
+/* pass an allocated buffer and the length to read. this function will try to
+ * fill the buffer with that length of data read from the body of the request.
+ * the return value says how much was actually written.
+ */
+int ebb_client_read(ebb_client *client, char *buffer, int length)
+{
+  size_t read;
+  
+  assert(client->open);
+  assert(client_finished_parsing);
+  
+  if(client->upload_file) {
+    read = fread(buffer, 1, length, client->upload_file);
+    /* TODO error checking! */
+    return read;
+  } else {
+    char* request_body = client->request_buffer + client->parser.nread;
+    
+    read = ramp(min(length, client->content_length - client->nread_from_body));
+    memcpy( buffer
+          , request_body + client->nread_from_body
+          , read
+          );
+    client->nread_from_body += read;
+    return read;
+  }
+}
 
 /* The following socket creation routines are modified and stolen from memcached */
 

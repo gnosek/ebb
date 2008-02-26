@@ -46,7 +46,7 @@ module Ebb
     end
     
     def read(len)
-      FFI::client_read(@client, len)
+      FFI::client_read_input(@client, len)
     end
     
     def gets

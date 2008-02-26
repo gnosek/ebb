@@ -83,7 +83,7 @@ class EbbTest < Test::Unit::TestCase
     end
   end
   
-  # this is rough but does detect errors
+  # this is rough but does detect major problems
   def test_ab
     r = %x{ab -n 1000 -c 50 -q http://0.0.0.0:4044/bytes/123}
     assert r =~ /Requests per second:\s*(\d+)/, r

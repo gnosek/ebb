@@ -67,8 +67,7 @@ VALUE env_field(const char *field, int length)
 VALUE client_new(ebb_client *_client)
 {
   VALUE client = Data_Wrap_Struct(cClient, 0, 0, _client);
-  _client->data = (void*)client;
-  rb_iv_set(client, "@content_length", INT2FIX(_client->content_length));
+  // rb_iv_set(client, "@content_length", INT2FIX(_client->content_length));
   return client;
 }
 
@@ -178,31 +177,26 @@ VALUE client_env(VALUE x, VALUE client)
 }
 
 
-VALUE client_read(VALUE x, VALUE client, VALUE size)
+VALUE client_read_input(VALUE x, VALUE client, VALUE size)
 {
   ebb_client *_client;
+  GString *_string;
   VALUE string;
-  int nread, _size = FIX2INT(size);
+  int _size = FIX2INT(size);
   Data_Get_Struct(client, ebb_client, _client);
   
   string = rb_str_buf_new( _size );
-  
-  do {
-    nread = ebb_client_read(_client, RSTRING_PTR(string), _size);
-  } while(nread == -2 && rb_io_wait_readable(_client->fd) == Qtrue);
-  
-  if(nread == -1) {
-    rb_raise(rb_eRuntimeError,"There was a problem reading from request input");
-    return Qnil;
-  } else if(nread == -3) {
-    return Qnil;
-  }
-  
+  int nread = ebb_client_read(_client, RSTRING_PTR(string), _size);
 #if RUBY_VERSION_CODE < 190
   RSTRING(string)->len = nread;
 #else
   rb_str_set_len(string, nread);
 #endif
+  
+  if(nread < 0)
+    rb_raise(rb_eRuntimeError,"There was a problem reading from input (bad tmp file?)");
+  if(nread == 0)
+    return Qnil;
   return string;
 }
 
@@ -255,7 +249,7 @@ void Init_ebb_ext()
   rb_define_singleton_method(mFFI, "server_unlisten", server_unlisten, 1);
   
   cClient = rb_define_class_under(mEbb, "Client", rb_cObject);
-  rb_define_singleton_method(mFFI, "client_read", client_read, 2);
+  rb_define_singleton_method(mFFI, "client_read_input", client_read_input, 2);
   rb_define_singleton_method(mFFI, "client_write", client_write, 2);
   rb_define_singleton_method(mFFI, "client_finished", client_finished, 1);
   rb_define_singleton_method(mFFI, "client_env", client_env, 1);

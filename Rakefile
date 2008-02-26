@@ -15,7 +15,7 @@ task(:compile => 'src/parser.c') do
 end
 
 file('src/parser.c' => 'src/parser.rl') do
-  sh "ragel #{dir('src/parser.rl')} | rlgen-cd -G2 -o #{dir('src/parser.c')}"
+  sh "ragel src/parser.rl | rlgen-cd -G2 -o src/parser.c"
 end
 
 task(:wc) { sh "wc -l ruby_lib/*.rb src/ebb*.{c,h}" }
@@ -36,7 +36,13 @@ spec = Gem::Specification.new do |s|
   s.bindir = 'bin'
   s.executables = %w(ebb_rails)
   
-  s.files = FileList.new ['{src,libev,benchmark,ruby_lib}/*.(rb|c|h)', 'bin/ebb_rails','README']
+  s.files = FileList.new('src/*.{c,h}',
+                         'src/extconf.rb',
+                         'libev/*',
+                         'ruby_lib/*',
+                         'benchmark/*.rb',
+                         'bin/ebb_rails',
+                         'README')
 end
 
 Rake::GemPackageTask.new(spec) do |pkg|
