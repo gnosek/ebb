@@ -70,15 +70,10 @@ module Ebb
     def initialize(app, options={})
       @socket = options[:socket]
       @port = (options[:port] || 4001).to_i
-      pid_file = options[:pid_file]
-      log_file = options[:log_file]
       @timeout =  options[:timeout]
-      
-      if options[:daemonize]
-        change_privilege options[:user], options[:group] if options[:user] && options[:group]
-        daemonize
-      end
       @app = app
+      
+      daemonizable_init(options)
       FFI::server_initialize(self)
     end
     
@@ -103,8 +98,7 @@ module Ebb
       client.write "\r\n"
       
       # Not many apps use streaming yet so i'll hold off on that feature
-      # until the rest of ebb is more developed
-      # Yes, I know streaming responses are very cool.
+      # until the rest of ebb is more developed.
       if body.kind_of?(String)
         client.write body
       else
@@ -117,6 +111,7 @@ module Ebb
       trap('INT')  { @running = false }
       
       if @socket
+        raise NotImplemented
         FFI::server_listen_on_socket(self, @socket) or raise "Problem listening on socket #{@socket}"
       else
         FFI::server_listen_on_port(self, @port) or raise "Problem listening on port #{@port}"

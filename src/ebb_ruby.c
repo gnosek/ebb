@@ -130,7 +130,6 @@ VALUE server_process_connections(VALUE x, VALUE server)
   
   Data_Get_Struct(server, ebb_server, _server);
   
-  
   ev_timer timeout;
   ev_timer_init (&timeout, oneshot_timeout, 0.5, 0.);
   ev_timer_start (_server->loop, &timeout);

@@ -64,7 +64,7 @@ int env_has_error(ebb_client *client)
 #define DEF_MAX_LENGTH(N,length) const size_t MAX_##N##_LENGTH = length; const char *MAX_##N##_LENGTH_ERR = "HTTP Parse Error: HTTP element " # N  " is longer than the " # length " allowed length."
 
 /** Validates the max length of given input and throws an exception if over. */
-#define VALIDATE_MAX_LENGTH(len, N) if(len > MAX_##N##_LENGTH) { env_error(client); ebb_info(MAX_##N##_LENGTH_ERR); }
+#define VALIDATE_MAX_LENGTH(len, N) if(len > MAX_##N##_LENGTH) { env_error(client); g_message(MAX_##N##_LENGTH_ERR); }
 
 /* Defines the maximum allowed lengths for various input elements.*/
 DEF_MAX_LENGTH(FIELD_NAME, 256);
@@ -175,7 +175,7 @@ void on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
   
   ebb_client_close(client);
 #ifdef DEBUG
-  ebb_info("peer timed out");
+  g_message("peer timed out");
 #endif
 }
 
@@ -199,7 +199,7 @@ void* read_body_into_file(void *_client)
   
   sprintf(client->upload_file_filename, "/tmp/ebb_upload_%010d", id++);
   tmpfile = fopen(client->upload_file_filename, "w+");
-  if(tmpfile == NULL) ebb_error("Cannot open tmpfile %s", client->upload_file_filename);
+  if(tmpfile == NULL) g_message("Cannot open tmpfile %s", client->upload_file_filename);
   client->upload_file = tmpfile;
   
   size_t body_head_length = client->read - client->parser.nread;
@@ -217,7 +217,7 @@ void* read_body_into_file(void *_client)
     written += r;
   }
   
-  // ebb_debug("wrote request header to file. written: %d, content_length: %d", written, client->content_length);
+  // g_debug("wrote request header to file. written: %d, content_length: %d", written, client->content_length);
   
   int bufsize = 5*1024;
   char buffer[bufsize];
@@ -245,7 +245,7 @@ void* read_body_into_file(void *_client)
     written += received;
   }
   rewind(tmpfile);
-  // ebb_debug("%d bytes written to file %s", written, client->upload_file_filename);
+  // g_debug("%d bytes written to file %s", written, client->upload_file_filename);
   return NULL;
 error:
   ebb_client_close(client);
@@ -299,7 +299,7 @@ void on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
   }
   return;
 error:
-  if(read < 0) ebb_warning("Error recving data: %s", strerror(errno));
+  if(read < 0) g_message("Error recving data: %s", strerror(errno));
   ebb_client_close(client);
 }
 
@@ -311,7 +311,7 @@ void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
   assert(&server->request_watcher == watcher);
   
   if(EV_ERROR & revents) {
-    ebb_info("on_request() got error event, closing server.");
+    g_message("on_request() got error event, closing server.");
     ebb_server_unlisten(server);
     return;
   }
@@ -337,7 +337,7 @@ void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
   int count = 0;
   for(i = 0; i < EBB_MAX_CLIENTS; i++)
     if(server->clients[i].open) count += 1;
-  ebb_debug("%d open connections", count);
+  g_debug("%d open connections", count);
 #endif
   client->open = TRUE;
   client->server = server;
@@ -426,17 +426,15 @@ void ebb_server_free(ebb_server *server)
 void ebb_server_unlisten(ebb_server *server)
 {
   if(server->open) {
-    ebb_info("Stopping Ebb server");
+    //g_message("Stopping Ebb server");
     int i;
     ebb_client *client;
-    for(i=0; i < EBB_MAX_CLIENTS; i++)
-      ebb_client_close(client);
+    //for(i=0; i < EBB_MAX_CLIENTS; i++)
+    //  ebb_client_close(client);
     ev_io_stop(server->loop, &server->request_watcher);
-    if(server->fd > 0) {
-      close(server->fd);
-      if(server->socketpath)
-        unlink(server->socketpath);
-    }
+    close(server->fd);
+    if(server->socketpath)
+      unlink(server->socketpath);
     server->open = FALSE;
   }
 }
@@ -510,12 +508,12 @@ void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents)
   ssize_t sent;
   
   if(EV_ERROR & revents) {
-    ebb_error("on_client_writable() got error event, closing peer");
+    g_message("on_client_writable() got error event, closing peer");
     return;
   }
   
   //if(client->written != 0)
-  //  ebb_debug("total written: %d", (int)(client->written));
+  //  g_debug("total written: %d", (int)(client->written));
   
   sent = send( client->fd
              , client->response_buffer->str + sizeof(gchar)*(client->written)
@@ -524,7 +522,7 @@ void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents)
              );
   if(sent < 0) {
 #ifdef DEBUG
-    ebb_warning("Error writing: %s", strerror(errno));
+    g_message("Error writing: %s", strerror(errno));
 #endif
     ebb_client_close(client);
     return;
@@ -532,7 +530,7 @@ void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents)
   client->written += sent;
   
   assert(client->written <= client->response_buffer->len);
-  //ebb_info("wrote %d bytes. total: %d", (int)sent, (int)(client->written));
+  //g_message("wrote %d bytes. total: %d", (int)sent, (int)(client->written));
   
   ev_timer_again(loop, &(client->timeout_watcher));
   
@@ -620,9 +618,9 @@ static int server_socket(const int port) {
     
     flags = 1;
     setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (void *)&flags, sizeof(flags));
-    // setsockopt(sfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags));
-    // setsockopt(sfd, SOL_SOCKET, SO_LINGER, (void *)&ling, sizeof(ling));
-    // setsockopt(sfd, IPPROTO_TCP, TCP_NODELAY, (void *)&flags, sizeof(flags));
+    setsockopt(sfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags));
+    setsockopt(sfd, SOL_SOCKET, SO_LINGER, (void *)&ling, sizeof(ling));
+    setsockopt(sfd, IPPROTO_TCP, TCP_NODELAY, (void *)&flags, sizeof(flags));
     
     /*
      * the memset call clears nonstandard fields in some impementations
@@ -701,7 +699,7 @@ static int server_socket_unix(const char *path, int access_mask) {
         return -1;
     }
     umask(old_umask);
-    if (listen(sfd, 1024) == -1) {
+    if (listen(sfd, EBB_MAX_CLIENTS) == -1) {
         perror("listen()");
         close(sfd);
         return -1;
