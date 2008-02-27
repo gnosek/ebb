@@ -24,6 +24,29 @@ task(:test => :compile) do
   sh "ruby #{dir("benchmark/test.rb")}"
 end
 
+
+task(:generate_site => 'site/index.html')
+file('site/index.html' => %w{README site/style.css}) do
+  require 'BlueCloth'
+  
+  doc = BlueCloth.new(File.read(dir('README')))
+  template = <<-HEREDOC
+  <html>
+    <head>
+      <title>Ebb</title>
+      <link type="text/css" rel="stylesheet" href="style.css" media="screen"/>
+    </head>
+    <body>  
+      <div id="content">CONTENT</div>
+    </body>
+  </html>
+HEREDOC
+  
+  File.open(dir('site/index.html'), "w+") do |f|
+    f.write template.sub('CONTENT', doc.to_html)
+  end
+end
+
 spec = Gem::Specification.new do |s|
   s.platform = Gem::Platform::RUBY
   s.summary = "A Web Server"
@@ -55,5 +78,5 @@ Rake::GemPackageTask.new(spec) do |pkg|
   pkg.need_zip = true
 end
 
-CLEAN.add ["**/*.{o,bundle,so,obj,pdb,lib,def,exp}", "benchmark/*.dump"]
+CLEAN.add ["**/*.{o,bundle,so,obj,pdb,lib,def,exp}", "benchmark/*.dump", 'site/index.html']
 CLOBBER.add ['src/Makefile', 'src/parser.c', 'src/mkmf.log','doc', 'coverage']

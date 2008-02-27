@@ -73,7 +73,6 @@ class ServerTest
   def initialize(name, port, &start_block)
     @name = name
     @port = port
-    @start_block = start_block
   end
   
   def <=>(a)
@@ -99,8 +98,6 @@ class ServerTest
       @pid = fork { start_mongrel }
     when 'thin'
       @pid = fork { start_thin }
-    else
-      @pid = fork { @start_block.call }
     end
   end
   
@@ -112,13 +109,12 @@ class ServerTest
     require 'mongrel'
     require 'swiftcore/evented_mongrel'
     ENV['EVENT'] = "1"
-    Rack::Handler::Mongrel.run(app, :Port => @port)
+    Rack::Handler::Mongrel.run(app, :Host => '0.0.0.0', :Port => @port)
   end
-
+  
   def start_ebb
     require File.dirname(__FILE__) + '/../ruby_lib/ebb'
-    server = Ebb::Server.new(app, :port => @port)
-    server.start
+    server = Ebb::Server.run(app, :port => @port)
   end
   
   def start_mongrel
