@@ -52,7 +52,7 @@ end
 case ARGV[0]
   
 when 'start'
-  app = Rack::Adapter::Rails.new(options)
+  app = RailsAdapter.new(options)
   server = Ebb::Server.new(app, options)
   
   server.pid_file = options[:pid_file]

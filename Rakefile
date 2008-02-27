@@ -42,6 +42,7 @@ spec = Gem::Specification.new do |s|
                          'ruby_lib/*',
                          'benchmark/*.rb',
                          'bin/ebb_rails',
+                         'VERSION',
                          'README')
 end
 

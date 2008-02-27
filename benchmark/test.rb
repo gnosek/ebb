@@ -112,6 +112,15 @@ class EbbTest < Test::Unit::TestCase
   end
 end
 
+class EbbRailsTest < Test::Unit::TestCase
+  # just to make sure there isn't some load error
+  def test_ebb_rails_version
+    out = %x{ruby #{Ebb::LIBDIR}/../bin/ebb_rails -v}
+    assert_match %r{Ebb #{Ebb::VERSION}}, out
+  end
+end
+
+
 # 
 # class SocketTest < Test::Unit::TestCase
 #   def test_socket_creation
