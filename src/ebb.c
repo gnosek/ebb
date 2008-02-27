@@ -155,7 +155,7 @@ void dispatch(ebb_client *client)
   if(server->port) {
     env_add_const(client, EBB_SERVER_NAME
                         , localhost_str
-                        , 8
+                        , 7
                         );
     env_add_const(client, EBB_SERVER_PORT
                         , server->port

@@ -13,28 +13,25 @@ Connections are processed as follows:
 2. When Ebb can read from a client socket, it passes the buffer into the
    mongrel state machine which parses the headers into name value pairs. 
 
-3. Ebb starts passes the request information and peer socket to a user
+3. Ebb handles any file uploads
+
+4. Ebb passes the request information and peer socket to a user
    supplied callback. 
 
-4. The included Ruby binding, supplying this callback transforms the request
-   into a Rack compatible "env" variable and passes it on a Rack adapter.
+5. The Ruby binding, ebb_ruby.c, supplying this callback transforms the
+   request into a Rack compatible "env" hash and passes it on a Rack
+   adapter.
 
-Because Ebb is written entirely in C, other language bindings can be added to
-make it useful to Non-Ruby frameworks. For example a Python WSGI interface is
+Because Ebb is written mostly in C, other language bindings can be added to
+make it useful to Non-Ruby frameworks. For example, a Python WSGI interface is
 forthcoming.
 
 Ebb aims to be the smallest and fastest web server possible specifically for
 doing the processing for web frameworks like Rails. 
 
-It's less than 1000 lines of C code!
-
-= TODO, ordered
-* Log levels
+= TODO
 * Option to listen on unix sockets instead of tcp
-* ebb_merb executable
 * Python binding
-* Better build system - using scon? (http://www.scons.org/)
-  Not autoconf.
 
 = License
 

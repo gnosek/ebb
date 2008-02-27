@@ -2,13 +2,12 @@
 # Copyright (c) 2007 Ry Dahl <ry.d4hl@gmail.com>
 # This software is released under the "MIT License". See README file for details.
 module Ebb
-  LIBDIR = File.expand_path(File.dirname(__FILE__))
+  LIBDIR = File.dirname(__FILE__)
   VERSION = File.read(LIBDIR + "/../VERSION").gsub(/\s/,'')
 end
 
-$: << Ebb::LIBDIR
 require Ebb::LIBDIR + '/../src/ebb_ext'
-require 'daemonizable'
+require Ebb::LIBDIR + '/daemonizable'
 
 module Ebb
   class Client
@@ -171,10 +170,4 @@ module Ebb
     504  => 'Gateway Time-out', 
     505  => 'HTTP Version not supported'
   }.freeze
-end
-
-module Rack
-  module Adapter
-    autoload :Rails, 'rails_adapter'
-  end
 end
