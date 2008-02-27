@@ -99,4 +99,4 @@ struct ebb_server {
   ebb_request_cb request_cb;
 };
 
-#endif ebb_h
+#endif

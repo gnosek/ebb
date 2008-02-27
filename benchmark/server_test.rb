@@ -72,7 +72,7 @@ class ServerTest
   attr_reader :name, :port, :app, :pid
   def initialize(name, port, &start_block)
     @name = name
-    @port = port
+    @port = port.to_i
   end
   
   def <=>(a)
@@ -109,7 +109,7 @@ class ServerTest
     require 'mongrel'
     require 'swiftcore/evented_mongrel'
     ENV['EVENT'] = "1"
-    Rack::Handler::Mongrel.run(app, :Host => '0.0.0.0', :Port => @port)
+    Rack::Handler::Mongrel.run(app, :Host => '0.0.0.0', :Port => @port.to_i)
   end
   
   def start_ebb
@@ -119,6 +119,7 @@ class ServerTest
   
   def start_mongrel
    require 'mongrel'
+   ENV.delete('EVENT')
    Rack::Handler::Mongrel.run(app, :Port => @port)
   end
   
@@ -128,7 +129,7 @@ class ServerTest
   end
   
   def trial(ab_cmd)
-    cmd = ab_cmd.sub('PORT', @port)
+    cmd = ab_cmd.sub('PORT', @port.to_s)
     
     puts "#{@name} (#{cmd})"
     
