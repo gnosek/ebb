@@ -20,6 +20,10 @@ end
 
 task(:wc) { sh "wc -l ruby_lib/*.rb src/ebb*.{c,h}" }
 
+task(:test => :compile) do
+  sh "ruby #{dir("benchmark/test.rb")}"
+end
+
 spec = Gem::Specification.new do |s|
   s.platform = Gem::Platform::RUBY
   s.summary = "A Web Server"

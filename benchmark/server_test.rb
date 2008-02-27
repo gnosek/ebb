@@ -32,6 +32,10 @@ class ServerTestResults
     @results = results
   end
   
+  def benchmark
+    @results.first[:benchmark]
+  end
+  
   def write(filename='results.dump')
     puts "writing dump file to #{filename}"
     File.open(filename, 'w+') do |f|
@@ -51,12 +55,12 @@ class ServerTestResults
     @results.map {|r| r[:server] }.uniq.sort
   end
 
-  def data(server, what=:size)
+  def data(server)
     server_data = @results.find_all { |r| r[:server] == server }
-    ticks = server_data.map { |d| d[what] }.uniq
+    ticks = server_data.map { |d| d[:input] }.uniq
     datas = []
     ticks.each do |c|
-      measurements = server_data.find_all { |d| d[what] == c }.map { |d| d[:rps] }
+      measurements = server_data.find_all { |d| d[:input] == c }.map { |d| d[:rps] }
       datas << [c, measurements.avg]
     end
     datas
@@ -127,142 +131,25 @@ class ServerTest
     Rack::Handler::Thin.run(app, :Port => @port)
   end
   
-  def trial(options = {})
-    concurrency = options[:concurrency] || 50
-    size = options[:size] || 20 * 1.kilobyte
-    requests = options[:requests] || 500
+  def trial(ab_cmd)
+    cmd = ab_cmd.sub('PORT', @port)
     
-    print "#{@name} (c=#{concurrency},s=#{size})  "
-    $stdout.flush
-    r = %x{ab -t 3 -q -c #{concurrency} http://0.0.0.0:#{@port}/bytes/#{size}}
-    # Complete requests:      1000
-
-    return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
-    rps = $1.to_f
-    if r =~ /Complete requests:\s*(\d+)/
-      completed_requests = $1.to_i
-    end
-    puts "#{rps} req/sec (#{completed_requests} completed)"
-    {
-      :test => 'get',
-      :server=> @name, 
-      :concurrency => concurrency, 
-      :size => size,
-      :rps => rps,
-      :requests => requests,
-      :requests_completed => completed_requests,
-      :time => Time.now
-    }
-  end
-  
-  
-  def self.wait_scale
-    [1,20,40,60,80,100]
-  end
-  def wait_trial(concurrency)
+    puts "#{@name} (#{cmd})"
     
-    print "#{@name} (c=#{concurrency})  "
-    $stdout.flush
-    r = %x{ab -t #{3} -q -c #{concurrency} http://0.0.0.0:#{@port}/periodical_activity/fibonacci/20}
-    # Complete requests:      1000
-
-    return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
-    rps = $1.to_f
-    if r =~ /Complete requests:\s*(\d+)/
-      completed_requests = $1.to_i
-    end
-    puts "#{rps} req/sec (#{completed_requests} completed)"
-    {
-      :test => 'get',
-      :server=> @name, 
-      :concurrency => concurrency,
-      :rps => rps,
-      :requests_completed => completed_requests,
-      :time => Time.now
-    }
-  end
-  
-  
-  def post_trial(size = 1, concurrency = 10)
-    
-    print "#{@name} (c=#{concurrency},posting=#{size})  "
-    $stdout.flush
-    
-    fn = "/tmp/ebb_post_trial_#{size}"
-    unless FileTest.exists?(fn)
-      File.open(fn, 'w+') { |f| f.write("C"*size) }
-    end
-    
-    r = %x{ab -t 6 -q -c #{concurrency} -p #{fn} http://0.0.0.0:#{@port}/test_post_length}
+    r = %x{#{cmd}}
     
     return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
     rps = $1.to_f
     if r =~ /Complete requests:\s*(\d+)/
-      completed_requests = $1.to_i
+      requests_completed = $1.to_i
     end
-    puts "#{rps} req/sec (#{completed_requests} completed)"
+    puts "   #{rps} req/sec (#{requests_completed} completed)"
+    
     {
-      :test => 'camping1',
-      :server=> @name, 
-      :concurrency => concurrency, 
-      :size => size,
+      :server => @name,
       :rps => rps,
-      :requests_completed => completed_requests,
-      :time => Time.now
+      :requests_completed => requests_completed,
+      :ab_cmd => cmd
     }
   end
-  
-end
-
-$servers = []
-$servers << ServerTest.new('emongrel', 4001) do
-  require 'mongrel'
-  require 'swiftcore/evented_mongrel'
-  ENV['EVENT'] = "1"
-  Rack::Handler::Mongrel.run(app, :Port => 4001)
-end
-
-$servers << ServerTest.new('ebb', 4002) do
-  require File.dirname(__FILE__) + '/../ruby_lib/ebb'
-  server = Ebb::Server.new(app, :port => 4002)
-  server.start
-end
-
-$servers << ServerTest.new('mongrel', 4003) do
- require 'mongrel'
- Rack::Handler::Mongrel.run(app, :Port => 4003)
-end
- 
-$servers << ServerTest.new('thin', 4004) do
-  require 'thin'
-  Rack::Handler::Thin.run(app, :Port => 4004)
-end
-
-
-benchmark_type = ARGV.shift
-servers_to_use = ARGV
-
-trap('INT')  { exit(1) }
-dumpfile = "#{benchmark_type}.dump"
-begin
-  results = ServerTestResults.open(dumpfile)
-  $servers.each { |s| s.start }
-  sleep 3
-  ServerTest.send("#{benchmark_type}_scale").each do |s|
-    $servers.rand_each do |server| 
-      if r = server.send("#{benchmark_type}_trial", s)
-        results << r
-      else
-        puts "error! restarting server"
-        server.kill
-        server.start
-      end
-      sleep 0.2 # give the other process some time to cool down?
-    end
-    puts "---"
-  end
-ensure
-  puts "\n\nkilling servers"
-  $servers.each { |server| server.kill }  
-  results.write(dumpfile)
 end

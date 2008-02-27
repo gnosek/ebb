@@ -1,0 +1,66 @@
+#!/usr/bin/env ruby
+
+require File.dirname(__FILE__) + "/server_test"
+# supported servers: mongrel, emongrel, ebb, thin
+# use another name an a already open port for anything else
+usage = "e.g. server_bench response_size ebb:4001 mongrel:4002 other:4003"
+
+benchmark = ARGV.shift
+
+servers = []
+ARGV.each do |server|
+  name, port = server.split(':')
+  servers << ServerTest.new(name, port)
+end
+
+trials = {
+  'response_size' => [0.1,1,5,7,10,15,18,20,23,25,30,40,45,50].map { |i|
+    bytes = (i*1024).to_i
+    [i, "ab -t 3 -q -c 50 http://0.0.0.0:PORT/bytes/#{bytes}"]
+  },
+  'wait_fib' => [1,20,40,60,80,100].map { |c|
+    [c, "ab -t 3 -q -c #{c} http://0.0.0.0:PORT/periodical_activity/fibonacci/20}"]
+  },
+  'post_size' => [0.1,1,5,7,10,15,18,20,23,25,30,40,45,50].map { |l|
+    size = (l * 1024).to_i
+    fn = "/tmp/ebb_post_trial_#{size}"
+    File.open(fn, 'w+') { |f| f.write("C"*size) } unless FileTest.exists?(fn)
+    [l, "ab -t 6 -q -c 50 -p #{fn} http://0.0.0.0:PORT/test_post_length}"]
+  },
+  'concurrency' => [1,10,20,30,50,75,100].map { |c|
+    [c, "ab -t 3 -c #{c} http://0.0.0.0:PORT/bytes/1"]
+  }
+}
+
+unless trials.has_key? benchmark
+  puts("must specify valid benchmark: #{trials.keys.join(" or ")}")
+  exit 1
+end
+
+trap('INT')  { exit(1) }
+dumpfile = "#{benchmark}.dump"
+begin
+  results = ServerTestResults.open(dumpfile)
+  servers.each { |s| s.start }
+  sleep 4
+  trials[benchmark].rand_each do |x, cmd|
+    servers.rand_each do |server|
+      result = server.trial(cmd)
+      if result.nil?
+        server.kill
+        sleep 0.5
+        server.start
+        sleep 2
+      else
+        result[:benchmark] = benchmark
+        result[:input] = x
+        results << result
+      end
+    end
+    puts "---"
+  end
+ensure
+  puts "\n\nkilling servers"
+  servers.each { |server| server.kill }  
+  results.write(dumpfile)
+end
