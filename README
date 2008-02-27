@@ -1,72 +1,114 @@
 # A Web Server Called *Ebb*
 
+## Intended Use
+
+Ebb aims to be a very small and fast web server specifically for hosting 
+web frameworks like Rails, Merb, and in the future Django.
+
+It is *not* meant to be a full featured web server like Lighttpd, Apache, or
+Nginx. Rather it should be used in multiplicity behind a load balancer and
+a front-end server. It is not meant to serve static files in production.
+
 ## Design
 
-The design is similar to the [Evented Mongrel][1] web server; except instead
-of using EventMachine (a ruby binding to libevent), the Ebb web server is written in C and uses the [libev][2] event loop library.
+The design is similar to the 
+[Evented Mongrel](http://swiftiply.swiftcore.org/mongrel.html) web server; 
+except instead of using EventMachine (a ruby binding to libevent), the Ebb 
+web server is written in C and uses the 
+[libev](http://software.schmorp.de/pkg/libev.html) event loop library.
 
 Connections are processed as follows:
 
 1. libev loops and waits for incoming connections.
-
-2. When Ebb can read from a client socket, it passes the buffer into the
-   mongrel state machine which parses the headers into name value pairs. 
-
-3. Ebb handles any file uploads
-
-4. Ebb passes the request information and peer socket to a user
-   supplied callback. 
-
-5. The Ruby binding, ebb_ruby.c, supplying this callback transforms the
-   request into a Rack compatible "env" hash and passes it on a Rack
-   adapter.
+2. When Ebb receives a connection, it passes the request into the
+   [mongrel state machine](http://mongrel.rubyforge.org/browser/tags/rel_1-0-1/ext/http11/http11_parser.rl) 
+   which securely parses the headers.
+3. When the request is complete, Ebb passes the information to a user
+   supplied callback.
+4. The Ruby binding supplying this callback transforms the
+   request into a [Rack](http://rack.rubyforge.org/) compatible `env` hash 
+   and passes it on a Rack adapter.
 
 Because Ebb is written mostly in C, other language bindings can be added to
 make it useful to Non-Ruby frameworks. For example, a Python WSGI interface is
 forthcoming.
 
-Ebb aims to be the smallest and fastest web server possible specifically for
-doing the processing for web frameworks like Rails, Merb, and Django.
+## Download
+
+The Ruby binding is available as a Ruby Gem. It can be install simply by 
+executing
+
+  `gem install ebb`
+
+Ebb depends on having glib2 headers and libraries installed. (Easily available
+on any UNIX system.)
 
 ## Why?
 
-Why? Because by building the server in C one is able to side-step the limitations on speed of many scripting languages. Inefficiencies are okay for quick and beautiful code, but for production web servers that might handle thousands of requests a second, an attempt should be made to be as efficient as possible.
+Because by building the server in C one is able to side-step the 
+limitations on speed of many scripting languages. Inefficiencies are okay
+for quick and beautiful code, but for production web servers that might handle
+thousands of requests a second, an attempt should be made to be as efficient
+as possible in processing connections.
 
 ![Response Size](http://s3.amazonaws.com/four.livejournal/20080227/response_size.png)
 
+This shows how the web servers perform with respect to throughput (using a 
+simple Rack application). Concurrency is at 50 clients.
+
 ![Concurrency](http://s3.amazonaws.com/four.livejournal/20080227/concurrency.png)
+
+A simple concurrent clients benchmark serving a *hello world* page.
 
 ![Uploads](http://s3.amazonaws.com/four.livejournal/20080227/post_size.png)
 
-## Download
+Ebb processes upload before handing it over to the web application. This 
+allows Ebb to continue to process other clients while the upload is in 
+progress. The large difference here is merely because Ebb's internal request 
+buffer is set at 40 kilobytes before it writes to file. (Improvement can 
+be made here.)
 
 
-## TODO
+## Contributions
+
+
+Contributions (patches, criticism, advice) are very welcome! The source code
+it hosted at [repo.or.cz](http://repo.or.cz/w/ebb.git) can be gotten by 
+executing
+
+`git clone http://repo.or.cz/r/ebb.git`
+
+I intend to keep the C code base very small. Do email me before writing any
+large additions. Here are some features that I want to add:
+
+### Todo 
+* Multipart parser
+* Streaming responses
+* Optimize and clean up upload handling
 * Option to listen on unix sockets instead of TCP
 * Python binding
 
-## License
+## (The MIT) License
 
-Copyright (c) 2007 Ryan Dahl
+Copyright © 2008 [Ry Dahl](http://tinyclouds.org) (ry at tiny clouds dot org)
 
-> Permission is hereby granted, free of charge, to any person obtaining
-> a copy of this software and associated documentation files (the
-> "Software"), to deal in the Software without restriction, including
-> without limitation the rights to use, copy, modify, merge, publish,
-> distribute, sublicense, and/or sell copies of the Software, and to
-> permit persons to whom the Software is furnished to do so, subject to
-> the following conditions:
-> 
-> The above copyright notice and this permission notice shall be
-> included in all copies or substantial portions of the Software.
-> 
-> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-> EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-> MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-> NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-> LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-> OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-> WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. 
+<div id="license">
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-  [1]: http://swiftiply.swiftcore.org/mongrel.html
-  [2]: http://software.schmorp.de/pkg/libev.html
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. 
+</div>

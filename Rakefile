@@ -25,7 +25,10 @@ task(:test => :compile) do
 end
 
 
-task(:generate_site => 'site/index.html')
+task(:site_upload => :site) do
+  sh 'scp -r site/* rydahl@rubyforge.org:/var/www/gforge-projects/ebb/'
+end
+task(:site => 'site/index.html')
 file('site/index.html' => %w{README site/style.css}) do
   require 'BlueCloth'
   
@@ -34,6 +37,7 @@ file('site/index.html' => %w{README site/style.css}) do
   <html>
     <head>
       <title>Ebb</title>
+      <link rel="alternate" href="http://max.kanat.us/tag-syndicate/?user=four&tag=ebb" title="RSS Feed" type="application/rss+xml" />
       <link type="text/css" rel="stylesheet" href="style.css" media="screen"/>
     </head>
     <body>  
