@@ -76,6 +76,33 @@ module Ebb
       FFI::server_initialize(self)
     end
     
+    def start
+      trap('INT')  { @running = false }
+      
+      if @socket
+        raise NotImplemented
+        FFI::server_listen_on_socket(self, @socket) or raise "Problem listening on socket #{@socket}"
+      else
+        FFI::server_listen_on_port(self, @port) or raise "Problem listening on port #{@port}"
+      end
+      @waiting_clients = []
+      
+      puts "Ebb listening at http://0.0.0.0:#{@port}/"
+      
+      @running = true
+      while FFI::server_process_connections(self) and @running
+        unless @waiting_clients.empty?
+          if $DEBUG and  @waiting_clients.length > 1
+            puts "#{@waiting_clients.length} waiting clients"
+          end
+          client = @waiting_clients.shift
+          process_client(client)
+        end
+      end
+      puts "Ebb unlistening"
+      FFI::server_unlisten(self)
+    end
+    
     def process_client(client)
       begin
         status, headers, body = @app.call(client.env)
@@ -104,30 +131,6 @@ module Ebb
         body.each { |p| client.write p }
       end
       client.finished
-    end
-    
-    def start
-      trap('INT')  { @running = false }
-      
-      if @socket
-        raise NotImplemented
-        FFI::server_listen_on_socket(self, @socket) or raise "Problem listening on socket #{@socket}"
-      else
-        FFI::server_listen_on_port(self, @port) or raise "Problem listening on port #{@port}"
-      end
-      @waiting_clients = []
-      
-      @running = true
-      while FFI::server_process_connections(self) and @running
-        unless @waiting_clients.empty?
-          if $DEBUG and  @waiting_clients.length > 1
-            puts "#{@waiting_clients.length} waiting clients"
-          end
-          client = @waiting_clients.shift
-          process_client(client)
-        end
-      end
-      FFI::server_unlisten(self)
     end
   end
   

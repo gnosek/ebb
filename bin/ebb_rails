@@ -1,7 +1,14 @@
 #!/usr/bin/env ruby
 require File.dirname(__FILE__) + '/../ruby_lib/ebb'
-require File.dirname(__FILE__) + '/../ruby_lib/rails_adapter'
 require 'optparse'
+require 'rubygems'
+require 'rack'
+
+module Rack
+  module Adapter
+    autoload :Rails, Ebb::LIBDIR + '/rack/adapter/rails'
+  end
+end
 
 options = {
   :root     => Dir.pwd,
@@ -12,6 +19,7 @@ options = {
   :log_file => 'log/ebb.log',
   :pid_file => 'tmp/pids/ebb.pid'
 }
+
 
 opts = OptionParser.new do |opts|
   opts.banner = "Usage: ebb_rails [options] start|stop"
@@ -52,7 +60,7 @@ end
 case ARGV[0]
   
 when 'start'
-  app = RailsAdapter.new(options)
+  app = Rack::Adapter::Rails.new(options)
   server = Ebb::Server.new(app, options)
   
   server.pid_file = options[:pid_file]

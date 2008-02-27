@@ -30,6 +30,7 @@ spec = Gem::Specification.new do |s|
   s.homepage = 'http://repo.or.cz/w/ebb.git'
   s.version = File.read(dir("VERSION")).gsub(/\s/,'')
   s.requirements << 'none'
+  s.rubyforge_project = 'ebb'
   
   s.require_path = 'ruby_lib'
   s.extensions = 'src/extconf.rb'
