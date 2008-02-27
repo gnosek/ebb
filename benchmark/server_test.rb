@@ -1,63 +1,9 @@
-$: << File.expand_path(File.dirname(__FILE__) + '/..')
+$: << File.expand_path(File.dirname(__FILE__))
 
 require 'rubygems'
 require 'rack'
 require 'application'
 
-module Bytes
-  def bytes
-    self
-  end
-  alias :byte :bytes
-
-  def kilobytes
-    self * 1024
-  end
-  alias :kilobyte :kilobytes
-
-  def megabytes
-    self * 1024.kilobytes
-  end
-  alias :megabyte :megabytes
-
-  def gigabytes
-    self * 1024.megabytes 
-  end
-  alias :gigabyte :gigabytes
-
-  def terabytes
-    self * 1024.gigabytes
-  end
-  alias :terabyte :terabytes
-  
-  def petabytes
-    self * 1024.terabytes
-  end
-  alias :petabyte :petabytes
-  
-  def exabytes
-    self * 1024.petabytes
-  end
-  alias :exabyte :exabytes
-  
-end
-class Fixnum
-  include Bytes
-end
-
-def number_to_human_size(size, precision=1)
-  size = Kernel.Float(size)
-  case
-    when size.to_i == 1;    "1 Byte"
-    when size < 1.kilobyte; "%d Bytes" % size
-    when size < 1.megabyte; "%.#{precision}f KB"  % (size / 1.0.kilobyte)
-    when size < 1.gigabyte; "%.#{precision}f MB"  % (size / 1.0.megabyte)
-    when size < 1.terabyte; "%.#{precision}f GB"  % (size / 1.0.gigabyte)
-    else                    "%.#{precision}f TB"  % (size / 1.0.terabyte)
-  end.sub(/([0-9])\.?0+ /, '\1 ' )
-rescue
-  nil
-end
 
 class Array
   def avg
@@ -140,7 +86,45 @@ class ServerTest
   
   def start
     puts "Starting #{name}"
-    @pid = fork { @start_block.call }
+    case name
+    when 'emongrel'
+      @pid = fork { start_emongrel }
+    when 'ebb'
+      @pid = fork { start_ebb }
+    when 'mongrel'
+      @pid = fork { start_mongrel }
+    when 'thin'
+      @pid = fork { start_thin }
+    else
+      @pid = fork { @start_block.call }
+    end
+  end
+  
+  def app
+    SimpleApp.new
+  end
+  
+  def start_emongrel
+    require 'mongrel'
+    require 'swiftcore/evented_mongrel'
+    ENV['EVENT'] = "1"
+    Rack::Handler::Mongrel.run(app, :Port => @port)
+  end
+
+  def start_ebb
+    require File.dirname(__FILE__) + '/../ruby_lib/ebb'
+    server = Ebb::Server.new(app, :port => @port)
+    server.start
+  end
+  
+  def start_mongrel
+   require 'mongrel'
+   Rack::Handler::Mongrel.run(app, :Port => @port)
+  end
+  
+  def start_thin
+    require 'thin'
+    Rack::Handler::Thin.run(app, :Port => @port)
   end
   
   def trial(options = {})
@@ -231,7 +215,6 @@ class ServerTest
 end
 
 $servers = []
-app = SimpleApp.new
 $servers << ServerTest.new('emongrel', 4001) do
   require 'mongrel'
   require 'swiftcore/evented_mongrel'

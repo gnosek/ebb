@@ -40,7 +40,7 @@ spec = Gem::Specification.new do |s|
   s.files = FileList.new('src/*.{c,h}',
                          'src/extconf.rb',
                          'libev/*',
-                         'ruby_lib/*',
+                         'ruby_lib/**/*',
                          'benchmark/*.rb',
                          'bin/ebb_rails',
                          'VERSION',
