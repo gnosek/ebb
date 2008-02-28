@@ -1,11 +1,12 @@
 # A Web Server Called *Ebb*
 
-Ebb aims to be a very small and fast web server specifically for hosting 
+Ebb aims to be a small and fast web server specifically for hosting 
 web frameworks like Rails, Merb, and in the future Django.
 
 It is not meant to be a full featured web server like Lighttpd, Apache, or
-Nginx. Rather it should be used in multiplicity behind a load balancer and
-a front-end server. It is not meant to serve static files in production.
+Nginx. Rather it should be used in multiplicity behind a 
+[load balancer](http://brainspl.at/articles/2007/11/09/a-fair-proxy-balancer-for-nginx-and-mongrel) 
+and a front-end server. It is not meant to serve static files in production.
 
 ## Design
 
@@ -36,13 +37,13 @@ forthcoming.
 
 ## Download
 
-The Ruby binding is available as a Ruby Gem. It can be install simply by 
-executing
+The Ruby binding is available as a Ruby Gem. It can be install by executing
 
   `gem install ebb`
 
 Ebb depends on having glib2 headers and libraries installed. (Easily available
-on any UNIX system.)
+on any UNIX system.) A manual downloads can be found at
+the [RubyForge project page](http://rubyforge.org/frs/?group_id=5640).
 
 ## Why?
 
@@ -51,6 +52,11 @@ limitations on speed of many scripting languages. Inefficiencies are okay
 for quick and beautiful code, but for production web servers that might handle
 thousands of requests a second, an attempt should be made to be as efficient
 as possible in processing connections.
+
+Following are some benchmarks. Please take these measurements with a grain
+of salt. Benchmarks like these are notorious for presenting an inaccurate
+or highly slanted view of how software performs. 
+The code for these can be found in the `benchmark` directory.
 
 ![Response Size](http://s3.amazonaws.com/four.livejournal/20080227/response_size.png)
 
@@ -63,11 +69,10 @@ A simple concurrent clients benchmark serving a *hello world* page.
 
 ![Uploads](http://s3.amazonaws.com/four.livejournal/20080227/post_size.png)
 
-Ebb processes upload before handing it over to the web application. This 
+Ebb processes uploads before handing it over to the web application. This 
 allows Ebb to continue to process other clients while the upload is in 
-progress. The large difference here is merely because Ebb's internal request 
-buffer is set at 40 kilobytes before it writes to file. (Improvement can 
-be made here.)
+progress. The cliff at 40k here is because Ebb's internal request
+buffer is set at 40 kilobytes before it writes to file.
 
 
 ## Contributions

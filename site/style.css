@@ -14,7 +14,7 @@ body {
 }
 
 h1, h2, h3, h4 { 
-  color: #CBCFB6;
+  color: #7DA478;
   padding: 0;
   margin: 1em 0;
 }
@@ -27,7 +27,7 @@ a { color: #E4AC3D; }
 
 #content { 
   margin: 1em auto ;
-  max-width: 30em;
+  max-width: 40em;
 }
 
 ol, ul { padding-left: 0; }

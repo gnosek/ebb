@@ -95,8 +95,10 @@ class EbbTest < Test::Unit::TestCase
   end
   
   def test_large_post
-    response = post("/test_post_length", 'C'*1024*50)
-    assert_equal 200, response.code.to_i, response.body
+    [50,60,100].each do |i|
+      response = post("/test_post_length", 'C'*1024*i)
+      assert_equal 200, response.code.to_i, response.body
+    end
   end
   
   def test_env
