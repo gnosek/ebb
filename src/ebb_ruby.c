@@ -236,7 +236,7 @@ void Init_ebb_ext()
   DEF_GLOBAL(server_name, "SERVER_NAME");
   DEF_GLOBAL(server_port, "SERVER_PORT");
   DEF_GLOBAL(path_info, "PATH_INFO");
-  DEF_GLOBAL(content_length, "HTTP_CONTENT_LENGTH");
+  DEF_GLOBAL(content_length, "CONTENT_LENGTH");
   DEF_GLOBAL(http_host, "HTTP_HOST");
   
   cServer = rb_define_class_under(mEbb, "Server", rb_cObject);

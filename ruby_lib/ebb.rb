@@ -12,11 +12,13 @@ require Ebb::LIBDIR + '/daemonizable'
 module Ebb
   class Client
     BASE_ENV = {
+      'SCRIPT_NAME' => '',
       'SERVER_SOFTWARE' => "Ebb #{Ebb::VERSION}",
       'SERVER_PROTOCOL' => 'HTTP/1.1',
       'GATEWAY_INTERFACE' => 'CGI/1.2',
       'rack.version' => [0, 1],
       'rack.errors' => STDERR,
+      'rack.url_scheme' => 'http',
       'rack.multithread'  => false,
       'rack.multiprocess' => false,
       'rack.run_once' => false
@@ -104,6 +106,8 @@ module Ebb
     end
     
     def process_client(client)
+      puts "Request: #{client.env.inspect}\n"
+      
       begin
         status, headers, body = @app.call(client.env)
       rescue

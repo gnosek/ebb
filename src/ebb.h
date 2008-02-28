@@ -10,7 +10,7 @@
 #include <glib.h>
 
 #define EV_STANDALONE 1
-#include "ev.h"
+#include <ev.h>
 
 #include "parser.h"
 

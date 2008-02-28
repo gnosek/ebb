@@ -25,7 +25,7 @@ trials = {
     size = (l * 1024).to_i
     fn = "/tmp/ebb_post_trial_#{size}"
     File.open(fn, 'w+') { |f| f.write("C"*size) } unless FileTest.exists?(fn)
-    [l, "ab -t 6 -q -c 50 -p #{fn} http://0.0.0.0:PORT/test_post_length}"]
+    [l, "ab -t 6 -q -c 50 -p #{fn} http://0.0.0.0:PORT/test_post_length"]
   },
   'concurrency' => [1,2,5,10,20,30,50,75,100].map { |c|
     [c, "ab -t 3 -c #{c} http://0.0.0.0:PORT/bytes/1"]

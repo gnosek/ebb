@@ -1,11 +1,9 @@
 # A Web Server Called *Ebb*
 
-## Intended Use
-
 Ebb aims to be a very small and fast web server specifically for hosting 
 web frameworks like Rails, Merb, and in the future Django.
 
-It is *not* meant to be a full featured web server like Lighttpd, Apache, or
+It is not meant to be a full featured web server like Lighttpd, Apache, or
 Nginx. Rather it should be used in multiplicity behind a load balancer and
 a front-end server. It is not meant to serve static files in production.
 
@@ -20,11 +18,14 @@ web server is written in C and uses the
 Connections are processed as follows:
 
 1. libev loops and waits for incoming connections.
+
 2. When Ebb receives a connection, it passes the request into the
    [mongrel state machine](http://mongrel.rubyforge.org/browser/tags/rel_1-0-1/ext/http11/http11_parser.rl) 
    which securely parses the headers.
+
 3. When the request is complete, Ebb passes the information to a user
    supplied callback.
+
 4. The Ruby binding supplying this callback transforms the
    request into a [Rack](http://rack.rubyforge.org/) compatible `env` hash 
    and passes it on a Rack adapter.
@@ -73,15 +74,14 @@ be made here.)
 
 
 Contributions (patches, criticism, advice) are very welcome! The source code
-it hosted at [repo.or.cz](http://repo.or.cz/w/ebb.git) can be gotten by 
-executing
+is hosted at [repo.or.cz](http://repo.or.cz/w/ebb.git). It can be retrieved 
+by executing
 
 `git clone http://repo.or.cz/r/ebb.git`
 
-I intend to keep the C code base very small. Do email me before writing any
-large additions. Here are some features that I want to add:
+I intend to keep the C code base very small, so do email me before writing any
+large additions. Here are some features that I would like to add:
 
-### Todo 
 * Multipart parser
 * Streaming responses
 * Optimize and clean up upload handling

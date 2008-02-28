@@ -21,7 +21,7 @@
 #include <glib.h>
 
 #define EV_STANDALONE 1
-#include "../libev/ev.c"
+#include <ev.c>
 
 #include "parser.h"
 #include "ebb.h"
