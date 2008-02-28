@@ -34,16 +34,17 @@ file('site/index.html' => %w{README site/style.css}) do
   
   doc = BlueCloth.new(File.read(dir('README')))
   template = <<-HEREDOC
-  <html>
-    <head>
-      <title>Ebb</title>
-      <link rel="alternate" href="http://max.kanat.us/tag-syndicate/?user=four&tag=ebb" title="RSS Feed" type="application/rss+xml" />
-      <link type="text/css" rel="stylesheet" href="style.css" media="screen"/>
-    </head>
-    <body>  
-      <div id="content">CONTENT</div>
-    </body>
-  </html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Ebb</title>
+    <link rel="alternate" href="http://max.kanat.us/tag-syndicate/?user=four&tag=ebb" title="RSS Feed" type="application/rss+xml" />
+    <link type="text/css" rel="stylesheet" href="style.css" media="screen"/>
+  </head>
+  <body>  
+    <div id="content">CONTENT</div>
+  </body>
+</html>
 HEREDOC
   
   File.open(dir('site/index.html'), "w+") do |f|
@@ -68,7 +69,7 @@ spec = Gem::Specification.new do |s|
   s.bindir = 'bin'
   s.executables = %w(ebb_rails)
   
-  s.files = FileList.new('src/*.{c,h}',
+  s.files = FileList.new('src/*.{rl,c,h}',
                          'src/extconf.rb',
                          'libev/*',
                          'ruby_lib/**/*',

@@ -42,7 +42,7 @@ The Ruby binding is available as a Ruby Gem. It can be install by executing
   `gem install ebb`
 
 Ebb depends on having glib2 headers and libraries installed. (Easily available
-on any UNIX system.) A manual downloads can be found at
+on any UNIX system.) Manual download can be done at
 the [RubyForge project page](http://rubyforge.org/frs/?group_id=5640).
 
 ## Why?
