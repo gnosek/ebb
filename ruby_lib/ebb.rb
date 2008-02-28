@@ -106,8 +106,7 @@ module Ebb
     end
     
     def process_client(client)
-      puts "Request: #{client.env.inspect}\n"
-      
+      #puts "Request: #{client.env.inspect}\n"
       begin
         status, headers, body = @app.call(client.env)
       rescue

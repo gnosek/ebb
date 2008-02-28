@@ -19,7 +19,7 @@ trials = {
     [i, "ab -t 3 -q -c 50 http://0.0.0.0:PORT/bytes/#{bytes}"]
   },
   'wait_fib' => [1,20,40,60,80,100].map { |c|
-    [c, "ab -t 3 -q -c #{c} http://0.0.0.0:PORT/periodical_activity/fibonacci/20}"]
+    [c, "ab -t 3 -q -c #{c} http://0.0.0.0:PORT/periodical_activity/fibonacci/20"]
   },
   'post_size' => [0.1,1,5,7,10,15,18,20,23,25,30,35,37,40,45,50].map { |l|
     size = (l * 1024).to_i
