@@ -264,7 +264,7 @@ void on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
   
   ssize_t read = recv( client->fd
                      , client->request_buffer + client->read
-                     , EBB_BUFFERSIZE - client->read - 1 /* -1 is for making ragel happy below */
+                     , EBB_BUFFERSIZE - client->read //- 1 /* -1 is for making ragel happy below */
                      , 0
                      );
   if(read <= 0) goto error; /* XXX is this the right action to take for read==0 ? */
@@ -272,7 +272,7 @@ void on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
   ev_timer_again(loop, &client->timeout_watcher);
   
   if(FALSE == client_finished_parsing) {
-    client->request_buffer[client->read] = '\0'; /* make ragel happy */
+    //client->request_buffer[client->read] = '\0'; /* make ragel happy */
     http_parser_execute( &client->parser
                        , client->request_buffer
                        , client->read
@@ -338,7 +338,12 @@ void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
   for(i = 0; i < EBB_MAX_CLIENTS; i++)
     if(server->clients[i].open) count += 1;
   g_debug("%d open connections", count);
+  
+  /* does ragel fuck up if request buffer isn't null? */
+  for(i=0; i< EBB_BUFFERSIZE; i++)
+    client->request_buffer[i] = 'A';
 #endif
+  
   client->open = TRUE;
   client->server = server;
   
@@ -362,6 +367,7 @@ void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
   client->parser.content_length = content_length_cb;
   
   /* OTHER */
+
   client->env_size = 0;
   client->read = client->nread_from_body = 0;
   client->response_buffer->len = 0; /* see note in ebb_client_close */
