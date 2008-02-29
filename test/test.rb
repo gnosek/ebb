@@ -8,6 +8,7 @@ class EbbTest < Test::Unit::TestCase
   def setup
     @pid = fork do
       server = Ebb::Server.new(self, :port => 4044)
+      STDOUT.reopen "/dev/null", "a"
       server.start
     end
     sleep 0.5
@@ -120,7 +121,21 @@ class EbbRailsTest < Test::Unit::TestCase
     out = %x{ruby #{Ebb::LIBDIR}/../bin/ebb_rails -v}
     assert_match %r{Ebb #{Ebb::VERSION}}, out
   end
+
+  #   def get(path)
+  #     Net::HTTP.get_response(URI.parse("http://0.0.0.0:4043#{path}"))
+  #   end
+  # 
+  #   def test_starting_with_many_options
+  #     %x{cd /tmp && rails ebb_test && ruby #{Ebb::LIBDIR}/../bin/ebb_rails start -d -e development -c /tmp/ebb_test -u www -g www -P /tmp/ebb.1.pid -p 4043 &}
+  #     response = get('/')
+  #     assert_equal 200, response.code
+  #   ensure
+  #     Process.kill('KILL', %x{cat /tmp/ebb.1.pid})
+  #   end
 end
+
+
 
 
 # 

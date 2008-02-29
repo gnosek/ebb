@@ -73,9 +73,6 @@ module Ebb
       @port = (options[:port] || 4001).to_i
       @timeout =  options[:timeout]
       @app = app
-      
-      daemonizable_init(options)
-      # FFI::server_initialize(self)
     end
     
     def start
