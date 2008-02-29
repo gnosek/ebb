@@ -26,14 +26,11 @@ static VALUE global_path_info;
 static VALUE global_content_length;
 static VALUE global_http_host;
 
+#define ASCII_UPPER(ch) ('a' <= ch && ch <= 'z' ? ch - 'a' + 'A' : ch)
 
 /* Variables with an underscore are C-level variables */
-
 VALUE env_field(const char *field, int length)
 {
-  VALUE f;
-  char *ch, *end;
-  
   if(field == NULL) {
     switch(length) {
       case EBB_REQUEST_METHOD:  return global_request_method;
@@ -48,14 +45,17 @@ VALUE env_field(const char *field, int length)
       default: assert(FALSE); /* unknown const */
     }
   } else {
-    f = rb_str_dup(global_http_prefix);
-    f = rb_str_buf_cat(f, field, length); 
-    
-    for(ch = RSTRING_PTR(f), end = ch + RSTRING_LEN(f); ch < end; ch++) {
-      if(*ch == '-') {
+    VALUE f = rb_str_new(NULL, RSTRING_LEN(global_http_prefix) + length);
+    memcpy( RSTRING_PTR(f)
+          , RSTRING_PTR(global_http_prefix)
+          , RSTRING_LEN(global_http_prefix)
+          );
+    for(int i = 0; i < length; i++) {
+      char *ch = RSTRING_PTR(f) + RSTRING_LEN(global_http_prefix) + i;
+      if(field[i] == '-') {
         *ch = '_';
       } else {
-        *ch = toupper(*ch);
+        *ch = ASCII_UPPER(field[i]);
       }
     }
     return f;
