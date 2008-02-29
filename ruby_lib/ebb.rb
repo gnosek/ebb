@@ -75,7 +75,7 @@ module Ebb
       @app = app
       
       daemonizable_init(options)
-      FFI::server_initialize(self)
+      # FFI::server_initialize(self)
     end
     
     def start

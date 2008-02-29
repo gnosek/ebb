@@ -83,22 +83,23 @@ void request_cb(ebb_client *_client, void *data)
 
 VALUE server_alloc(VALUE self)
 {
+  struct ev_loop *loop = ev_default_loop (0);
   ebb_server *_server = ebb_server_alloc();
   VALUE server = Qnil;
   server = Data_Wrap_Struct(cServer, 0, ebb_server_free, _server);
+  ebb_server_init(_server, loop, request_cb, (void*)server);
   return server; 
 }
 
 
-VALUE server_initialize(VALUE x, VALUE server)
-{
-  struct ev_loop *loop = ev_default_loop (0);
-  ebb_server *_server;
-  
-  Data_Get_Struct(server, ebb_server, _server);
-  ebb_server_init(_server, loop, request_cb, (void*)server);
-  return Qnil;
-}
+// VALUE server_initialize(VALUE x, VALUE server)
+// {
+//   struct ev_loop *loop = ev_default_loop (0);
+//   ebb_server *_server;
+//   
+//   Data_Get_Struct(server, ebb_server, _server);
+//   return Qnil;
+// }
 
 
 VALUE server_listen_on_port(VALUE x, VALUE server, VALUE port)
@@ -241,7 +242,7 @@ void Init_ebb_ext()
   
   cServer = rb_define_class_under(mEbb, "Server", rb_cObject);
   rb_define_alloc_func(cServer, server_alloc);
-  rb_define_singleton_method(mFFI, "server_initialize", server_initialize, 1);
+  // rb_define_singleton_method(mFFI, "server_initialize", server_initialize, 1);
   rb_define_singleton_method(mFFI, "server_process_connections", server_process_connections, 1);
   rb_define_singleton_method(mFFI, "server_listen_on_port", server_listen_on_port, 2);
   rb_define_singleton_method(mFFI, "server_listen_on_socket", server_listen_on_socket, 2);

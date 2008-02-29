@@ -426,11 +426,8 @@ void ebb_server_free(ebb_server *server)
 void ebb_server_unlisten(ebb_server *server)
 {
   if(server->open) {
-    //g_message("Stopping Ebb server");
     int i;
     ebb_client *client;
-    //for(i=0; i < EBB_MAX_CLIENTS; i++)
-    //  ebb_client_close(client);
     ev_io_stop(server->loop, &server->request_watcher);
     close(server->fd);
     if(server->socketpath)

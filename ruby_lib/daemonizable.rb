@@ -43,8 +43,8 @@ module Daemonizable
   end
   
   def daemonizable_init(options)
-    pid_file = options[:pid_file]
-    log_file = options[:log_file]
+    @pid_file = options[:pid_file]
+    @log_file = options[:log_file]
     if options[:daemonize]
       change_privilege options[:user], options[:group] if options[:user] && options[:group]
       daemonize
