@@ -135,6 +135,10 @@ module Ebb
       end
       client.finished
     end
+    
+    def log(msg)
+      puts msg
+    end
   end
   
   HTTP_STATUS_CODES = {  
