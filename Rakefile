@@ -3,6 +3,22 @@ require 'rake/testtask'
 require 'rake/gempackagetask'
 require 'rake/clean'
 
+COMMON_DISTFILES = FileList.new('src/ebb.{c,h}', 'src/parser.{c,h}', 
+  'libev/*', 'VERSION', 'README')
+
+RUBY_DISTFILES = COMMON_DISTFILES + FileList.new('src/ebb_ruby.c', 
+  'src/extconf.rb', 'ruby_lib/**/*', 'benchmark/*.rb', 'bin/ebb_rails', 
+  'test/*')
+
+PYTHON_DISTFILES = COMMON_DISTFILES + FileList.new('setup.py', 
+  'src/ebb_python.c')
+
+CLEAN.add ["**/*.{o,bundle,so,obj,pdb,lib,def,exp}", "benchmark/*.dump", 
+  'site/index.html', 'MANIFEST']
+
+CLOBBER.add ['src/Makefile', 'src/parser.c', 'src/mkmf.log', 'build']
+
+
 def dir(path)
   File.expand_path File.join(File.dirname(__FILE__), path)
 end
@@ -13,6 +29,12 @@ task(:package => 'src/parser.c')
 
 task(:compile => 'src/parser.c') do 
   sh "cd #{dir('src')} && ruby extconf.rb && make"
+end
+
+file('MANIFEST') do
+  File.open(dir('MANIFEST'), "w+") do |manifest|
+    PYTHON_DISTFILES.each { |file| manifest.puts(file) }
+  end
 end
 
 file('src/parser.c' => 'src/parser.rl') do
@@ -71,21 +93,9 @@ spec = Gem::Specification.new do |s|
   s.bindir = 'bin'
   s.executables = %w(ebb_rails)
   
-  s.files = FileList.new('src/*.{rl,c,h}',
-                         'src/extconf.rb',
-                         'libev/*',
-                         'ruby_lib/**/*',
-                         'benchmark/*.rb',
-                         'bin/ebb_rails',
-                         'VERSION',
-                         'README')
+  s.files = RUBY_DISTFILES
 end
 
 Rake::GemPackageTask.new(spec) do |pkg|
   pkg.need_zip = true
 end
-
-
-
-CLEAN.add ["**/*.{o,bundle,so,obj,pdb,lib,def,exp}", "benchmark/*.dump", 'site/index.html']
-CLOBBER.add ['src/Makefile', 'src/parser.c', 'src/mkmf.log','doc', 'coverage']

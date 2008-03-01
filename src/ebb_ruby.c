@@ -1,8 +1,7 @@
 /* A ruby binding to the ebb web server
- * Copyright (c) 2007 Ry Dahl <ry.d4hl@gmail.com>
- * This software is released under the "MIT License". See README file for details.
+ * Copyright (c) 2008 Ry Dahl. This software is released under the MIT 
+ * License. See README file for details.
  */
-
 #include <ruby.h>
 #include <assert.h>
 #include <fcntl.h>

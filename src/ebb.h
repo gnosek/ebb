@@ -1,6 +1,6 @@
-/* Ebb Web Server
- * Copyright (c) 2007 Ry Dahl <ry.d4hl@gmail.com>
- * This software is released under the "MIT License". See README file for details.
+/* The Ebb Web Server
+ * Copyright (c) 2008 Ry Dahl. This software is released under the MIT 
+ * License. See README file for details.
  */
 #ifndef ebb_h
 #define ebb_h

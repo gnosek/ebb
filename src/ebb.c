@@ -1,6 +1,6 @@
-/* Ebb Web Server
- * Copyright (c) 2007 Ry Dahl
- * This software is released under the "MIT License". See README file for details.
+/* The Ebb Web Server
+ * Copyright (c) 2008 Ry Dahl. This software is released under the MIT 
+ * License. See README file for details.
  */
 #include <unistd.h>
 #include <fcntl.h>

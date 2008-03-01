@@ -38,6 +38,8 @@ $LDFLAGS << " -lpthread "
 $CFLAGS << " -I#{libev_dir} " << flags.join(' ')
 $defs << "-DRUBY_VERSION_CODE=#{RUBY_VERSION.gsub(/\D/, '')}"
 
+$srcs = ['ebb.c', 'ebb_ruby.c', 'parser.c']
+$objs = ['ebb.o', 'ebb_ruby.o', 'parser.o']
 
 dir_config('ebb_ext')
 create_makefile('ebb_ext')
