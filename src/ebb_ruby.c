@@ -50,7 +50,8 @@ VALUE env_field(const char *field, int length)
           , RSTRING_PTR(global_http_prefix)
           , RSTRING_LEN(global_http_prefix)
           );
-    for(int i = 0; i < length; i++) {
+    int i;
+    for(i = 0; i < length; i++) {
       char *ch = RSTRING_PTR(f) + RSTRING_LEN(global_http_prefix) + i;
       if(field[i] == '-') {
         *ch = '_';
