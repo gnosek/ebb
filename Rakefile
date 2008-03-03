@@ -43,7 +43,7 @@ task(:wc) { sh "wc -l ruby_lib/*.rb src/ebb*.{c,h}" }
 
 task(:test => :compile)
 Rake::TestTask.new do |t|
-  t.test_files = 'test/test.rb'
+  t.test_files = 'test/basic_test.rb'
   t.verbose = true
 end
 

@@ -11,6 +11,19 @@ typedef struct {
     ebb_server *server;
 } Server;
 
+void Server_alloc() 
+{
+  
+}
+
+static void
+Server_dealloc(Server* self)
+{
+  ebb_server_free(self->server);
+  self->ob_type->tp_free((PyObject*)self);
+}
+
+
 static PyMethodDef Server_methods[] = {
     {"name", (PyCFunction)Noddy_name, METH_NOARGS,
      "Return the name, combining the first and last name"
@@ -56,7 +69,7 @@ static PyTypeObject ServerType = {
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
     (initproc)Server_init,      /* tp_init */
-    0,                         /* tp_alloc */
+    Server_alloc,               /* tp_alloc */
     Server_new,                 /* tp_new */
 };
 

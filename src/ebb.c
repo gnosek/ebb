@@ -358,6 +358,10 @@ void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
   client->response_buffer->len = 0; /* see note in ebb_client_close */
   client->content_length = 0;
   
+  client->status_sent = FALSE;
+  client->headers_sent = FALSE;
+  client->body_sent = FALSE;
+  
   /* SETUP READ AND TIMEOUT WATCHERS */
   client->read_watcher.data = client;
   ev_init(&client->read_watcher, on_readable);
@@ -526,6 +530,27 @@ void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents)
     ebb_client_close(client);
 }
 
+void ebb_client_write_status(ebb_client *client, int status, const char *human_status)
+{
+  assert(client->status_sent == FALSE);
+  g_string_append_printf( client->response_buffer
+                        , "HTTP/1.1 %d %s\r\n"
+                        , status
+                        , human_status
+                        );
+  client->status_sent = TRUE;
+}
+
+void ebb_client_write_header(ebb_client *client, const char *field, const char *value)
+{
+  assert(client->status_sent == TRUE);
+  assert(client->headers_sent == FALSE);
+  g_string_append_printf( client->response_buffer
+                        , "%s: %s\r\n"
+                        , field
+                        , value
+                        );
+}
 
 void ebb_client_write(ebb_client *client, const char *data, int length)
 {

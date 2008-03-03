@@ -5,6 +5,10 @@ require 'test/unit'
 
 PORT = 4037
 
+# This test depends on echo_server running at port 4037. I do this so that
+# I can run a Python server at that port with a similar application and reuse
+# these tests.
+
 def send_request(request_string)
   socket = TCPSocket.new("0.0.0.0", PORT)
   socket.write(request_string)
@@ -33,7 +37,7 @@ def drops_request?(request_string)
 end
 
 class HttpParserTest < Test::Unit::TestCase
-    
+  
   def test_parse_simple
     env = send_request("GET / HTTP/1.1\r\n\r\n")
     
@@ -93,6 +97,7 @@ class HttpParserTest < Test::Unit::TestCase
     10.times do |c|
       req = "GET /#{rand_data(10,120)} HTTP/1.1\r\nX-Test: #{rand_data(1024, 1024+(c*1024), false)}\r\n\r\n"
       assert drops_request?(req), "large mangled field values are caught"
+      ### XXX this is broken! fix me. this test should drop the request.
     end
     
     # then large headers are rejected too

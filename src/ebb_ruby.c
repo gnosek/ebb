@@ -10,8 +10,6 @@
 
 static VALUE cServer;
 static VALUE cClient;
-static VALUE eParserError;
-
 static VALUE global_http_prefix;
 static VALUE global_request_method;
 static VALUE global_request_uri;
@@ -26,14 +24,16 @@ static VALUE global_path_info;
 static VALUE global_content_length;
 static VALUE global_http_host;
 
+/* Variables with a leading underscore are C-level variables */
+
 #define ASCII_UPPER(ch) ('a' <= ch && ch <= 'z' ? ch - 'a' + 'A' : ch)
 
 VALUE client_new(ebb_client *_client)
 {
   VALUE client = Data_Wrap_Struct(cClient, 0, 0, _client);
-  // rb_iv_set(client, "@content_length", INT2FIX(_client->content_length));
   return client;
 }
+
 
 void request_cb(ebb_client *_client, void *data)
 {
@@ -45,6 +45,7 @@ void request_cb(ebb_client *_client, void *data)
   rb_ary_push(waiting_clients, client);
 }
 
+
 VALUE server_alloc(VALUE self)
 {
   struct ev_loop *loop = ev_default_loop (0);
@@ -54,16 +55,6 @@ VALUE server_alloc(VALUE self)
   ebb_server_init(_server, loop, request_cb, (void*)server);
   return server; 
 }
-
-
-// VALUE server_initialize(VALUE x, VALUE server)
-// {
-//   struct ev_loop *loop = ev_default_loop (0);
-//   ebb_server *_server;
-//   
-//   Data_Get_Struct(server, ebb_server, _server);
-//   return Qnil;
-// }
 
 
 VALUE server_listen_on_port(VALUE x, VALUE server, VALUE port)
@@ -111,6 +102,7 @@ VALUE server_process_connections(VALUE x, VALUE server)
     return Qfalse;
 }
 
+
 VALUE server_unlisten(VALUE x, VALUE server)
 {
   ebb_server *_server;
@@ -119,7 +111,7 @@ VALUE server_unlisten(VALUE x, VALUE server)
   return Qnil;
 }
 
-/* Variables with an underscore are C-level variables */
+
 VALUE env_field(struct ebb_env_item *item)
 {
   VALUE f;
@@ -150,6 +142,7 @@ VALUE env_field(struct ebb_env_item *item)
   return Qnil;
 }
 
+
 VALUE env_value(struct ebb_env_item *item)
 {
   if(item->value_length > 0)
@@ -157,6 +150,7 @@ VALUE env_value(struct ebb_env_item *item)
   else
     return Qnil;
 }
+
 
 VALUE client_env(VALUE x, VALUE client)
 {
@@ -198,6 +192,21 @@ VALUE client_read_input(VALUE x, VALUE client, VALUE size)
   return string;
 }
 
+VALUE client_write_status(VALUE x, VALUE client, VALUE status, VALUE human_status)
+{
+  ebb_client *_client;
+  Data_Get_Struct(client, ebb_client, _client);
+  ebb_client_write_status(_client, FIX2INT(status), StringValuePtr(human_status));
+  return Qnil;
+}
+
+VALUE client_write_header(VALUE x, VALUE client, VALUE field, VALUE value)
+{
+  ebb_client *_client;
+  Data_Get_Struct(client, ebb_client, _client);
+  ebb_client_write_header(_client, StringValuePtr(field), StringValuePtr(value));
+  return Qnil;
+}
 
 VALUE client_write(VALUE x, VALUE client, VALUE string)
 {
@@ -222,10 +231,6 @@ void Init_ebb_ext()
   VALUE mEbb = rb_define_module("Ebb");
   VALUE mFFI = rb_define_module_under(mEbb, "FFI");
   
-  
-  eParserError = rb_define_class_under(mEbb, "ParserError", rb_eIOError);
-  
-  
   /** Defines global strings in the init method. */
 #define DEF_GLOBAL(N, val) global_##N = rb_obj_freeze(rb_str_new2(val)); rb_global_variable(&global_##N)
   DEF_GLOBAL(http_prefix, "HTTP_");
@@ -244,7 +249,6 @@ void Init_ebb_ext()
   
   cServer = rb_define_class_under(mEbb, "Server", rb_cObject);
   rb_define_alloc_func(cServer, server_alloc);
-  // rb_define_singleton_method(mFFI, "server_initialize", server_initialize, 1);
   rb_define_singleton_method(mFFI, "server_process_connections", server_process_connections, 1);
   rb_define_singleton_method(mFFI, "server_listen_on_port", server_listen_on_port, 2);
   rb_define_singleton_method(mFFI, "server_listen_on_socket", server_listen_on_socket, 2);
@@ -252,8 +256,9 @@ void Init_ebb_ext()
   
   cClient = rb_define_class_under(mEbb, "Client", rb_cObject);
   rb_define_singleton_method(mFFI, "client_read_input", client_read_input, 2);
+  rb_define_singleton_method(mFFI, "client_write_status", client_write_status, 3);
+  rb_define_singleton_method(mFFI, "client_write_header", client_write_header, 3);
   rb_define_singleton_method(mFFI, "client_write", client_write, 2);
   rb_define_singleton_method(mFFI, "client_finished", client_finished, 1);
   rb_define_singleton_method(mFFI, "client_env", client_env, 1);
-
 }

@@ -30,6 +30,8 @@ typedef struct ebb_client ebb_client;
 /*** Ebb Client ***/
 void ebb_client_close(ebb_client*);
 int ebb_client_read(ebb_client *client, char *buffer, int length);
+void ebb_client_write_status(ebb_client*, int status, const char *human_status);
+void ebb_client_write_header(ebb_client*, const char *field, const char *value);
 void ebb_client_write(ebb_client*, const char *data, int length);
 void ebb_client_finished( ebb_client *client);
 
@@ -72,6 +74,10 @@ struct ebb_client {
   size_t written;
   
   ev_timer timeout_watcher;
+  
+  int status_sent;
+  int headers_sent;
+  int body_sent;
   
   /* the ENV structure */
   int env_size;

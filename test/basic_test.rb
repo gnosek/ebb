@@ -1,7 +1,6 @@
 require  File.dirname(__FILE__) + '/../ruby_lib/ebb'
 require 'test/unit'
 require 'net/http'
-require 'base64'
 require 'socket'
 require 'rubygems'
 require 'json'
@@ -39,12 +38,6 @@ class EbbTest < Test::Unit::TestCase
       n = commands.last.to_i
       raise "bytes called with n <= 0" if n <= 0
       body = @@responses[n] || "C"*n
-      status = 200
-    
-    elsif commands.include?('env')
-      env.delete('rack.input') # delete this because it's hard to marshal
-      env.delete('rack.errors')
-      body = Base64.encode64(Marshal.dump(env))
       status = 200
       
     elsif commands.include?('test_post_length')
@@ -105,26 +98,7 @@ class EbbTest < Test::Unit::TestCase
       assert_equal 200, response.code.to_i, response.body
     end
   end
-  
-  def test_env
-    response = get('/env')
-    env = Marshal.load(Base64.decode64(response.body))
-    assert_equal '/env', env['PATH_INFO']
-    assert_equal '/env', env['REQUEST_PATH']
-    assert_equal 'HTTP/1.1', env['SERVER_PROTOCOL']
-    assert_equal 'CGI/1.2', env['GATEWAY_INTERFACE']
-    assert_equal '0.0.0.0', env['SERVER_NAME']
-    assert_equal PORT.to_s, env['SERVER_PORT']
-    assert_equal 'GET', env['REQUEST_METHOD']
-  end
-  
-  
-
 end
-
-[
-  
-]
 
 class EnvTest < Test::Unit::TestCase
   def call(env)

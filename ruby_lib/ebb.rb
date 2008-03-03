@@ -39,6 +39,14 @@ module Ebb
     def write(data)
       FFI::client_write(self, data)
     end
+    
+    def write_status(status)
+      FFI::client_write_status(self, status.to_i, HTTP_STATUS_CODES[status])
+    end
+    
+    def write_header(field, value)
+      FFI::client_write_header(self, field.to_s, value.to_s)
+    end
   end
   
   class RequestBody
@@ -113,14 +121,15 @@ module Ebb
         body = "Internal Server Error\n"
       end
       
-      client.write "HTTP/1.1 %d %s\r\n" % [status, HTTP_STATUS_CODES[status]]
+      client.write_status(status)
       
       if body.respond_to? :length and status != 304
-        client.write "Connection: close\r\n"
+        headers['Connection'] = 'close'
         headers['Content-Length'] = body.length
       end
       
-      headers.each { |k, v| client.write "#{k}: #{v}\r\n" }
+      headers.each { |k, v| client.write_header(k,v) }
+      
       client.write "\r\n"
       
       # Not many apps use streaming yet so i'll hold off on that feature
