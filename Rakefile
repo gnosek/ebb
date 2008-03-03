@@ -37,10 +37,7 @@ file('MANIFEST') do
   end
 end
 
-file('src/parser.c' => 'src/parser.rl') do
-  #sh "ragel src/parser.rl | rlgen-cd -G2 -o src/parser.c"
-  sh 'ragel -G2 src/parser.rl'
-end
+
 
 task(:wc) { sh "wc -l ruby_lib/*.rb src/ebb*.{c,h}" }
 
@@ -98,4 +95,14 @@ end
 
 Rake::GemPackageTask.new(spec) do |pkg|
   pkg.need_zip = true
+end
+
+## Compile 
+file('src/parser.c' => 'src/parser.rl') do
+  #sh "ragel src/parser.rl | rlgen-cd -G2 -o src/parser.c"  # ragel 5
+  sh 'ragel -G2 src/parser.rl' # ragel 6
+end
+
+file('test/parser_test' => ['src/parser.c', 'src/parser.h']) do
+  sh "gcc -g -Wall -I#{dir('src')} -DPARSER_TEST #{dir('src/parser.c')} -o #{dir('test/parser_test')}"
 end

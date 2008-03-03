@@ -10,6 +10,7 @@
 
 static VALUE cServer;
 static VALUE cClient;
+static VALUE eParserError;
 
 static VALUE global_http_prefix;
 static VALUE global_request_method;
@@ -26,43 +27,6 @@ static VALUE global_content_length;
 static VALUE global_http_host;
 
 #define ASCII_UPPER(ch) ('a' <= ch && ch <= 'z' ? ch - 'a' + 'A' : ch)
-
-/* Variables with an underscore are C-level variables */
-VALUE env_field(const char *field, int length)
-{
-  if(field == NULL) {
-    switch(length) {
-      case EBB_REQUEST_METHOD:  return global_request_method;
-      case EBB_REQUEST_URI:     return global_request_uri;
-      case EBB_FRAGMENT:        return global_fragment;
-      case EBB_REQUEST_PATH:    return global_request_path;
-      case EBB_QUERY_STRING:    return global_query_string;
-      case EBB_HTTP_VERSION:    return global_http_version;
-      case EBB_SERVER_NAME:     return global_server_name;
-      case EBB_SERVER_PORT:     return global_server_port;
-      case EBB_CONTENT_LENGTH:  return global_content_length;
-      default: assert(FALSE); /* unknown const */
-    }
-  } else {
-    VALUE f = rb_str_new(NULL, RSTRING_LEN(global_http_prefix) + length);
-    memcpy( RSTRING_PTR(f)
-          , RSTRING_PTR(global_http_prefix)
-          , RSTRING_LEN(global_http_prefix)
-          );
-    int i;
-    for(i = 0; i < length; i++) {
-      char *ch = RSTRING_PTR(f) + RSTRING_LEN(global_http_prefix) + i;
-      if(field[i] == '-') {
-        *ch = '_';
-      } else {
-        *ch = ASCII_UPPER(field[i]);
-      }
-    }
-    return f;
-  }
-  assert(FALSE);
-  return Qnil;
-}
 
 VALUE client_new(ebb_client *_client)
 {
@@ -155,6 +119,44 @@ VALUE server_unlisten(VALUE x, VALUE server)
   return Qnil;
 }
 
+/* Variables with an underscore are C-level variables */
+VALUE env_field(struct ebb_env_item *item)
+{
+  VALUE f;
+  switch(item->type) {
+    case EBB_FIELD_VALUE_PAIR:
+      f = rb_str_new(NULL, RSTRING_LEN(global_http_prefix) + item->field_length);
+      memcpy( RSTRING_PTR(f)
+            , RSTRING_PTR(global_http_prefix)
+            , RSTRING_LEN(global_http_prefix)
+            );
+      int i;
+      for(i = 0; i < item->field_length; i++) {
+        char *ch = RSTRING_PTR(f) + RSTRING_LEN(global_http_prefix) + i;
+        *ch = item->field[i] == '-' ? '_' : ASCII_UPPER(item->field[i]);
+      }
+      return f;
+    case EBB_REQUEST_METHOD:  return global_request_method;
+    case EBB_REQUEST_URI:     return global_request_uri;
+    case EBB_FRAGMENT:        return global_fragment;
+    case EBB_REQUEST_PATH:    return global_request_path;
+    case EBB_QUERY_STRING:    return global_query_string;
+    case EBB_HTTP_VERSION:    return global_http_version;
+    case EBB_SERVER_NAME:     return global_server_name;
+    case EBB_SERVER_PORT:     return global_server_port;
+    case EBB_CONTENT_LENGTH:  return global_content_length;
+  }
+  assert(FALSE);
+  return Qnil;
+}
+
+VALUE env_value(struct ebb_env_item *item)
+{
+  if(item->value_length > 0)
+    return rb_str_new(item->value, item->value_length);
+  else
+    return Qnil;
+}
 
 VALUE client_env(VALUE x, VALUE client)
 {
@@ -162,14 +164,10 @@ VALUE client_env(VALUE x, VALUE client)
   VALUE hash = rb_hash_new();
   int i;  
   Data_Get_Struct(client, ebb_client, _client);
-  /* This client->env_fields, client->env_value structure is pretty hacky
-   * and a bit hard to follow. Look at the #defines at the top of ebb.c to
-   * see what they are doing. Basically it's a list of (ptr,length) pairs
-   * for both a field and value
-   */
+  
   for(i=0; i < _client->env_size; i++) {
-    rb_hash_aset(hash, env_field(_client->env_fields[i], _client->env_field_lengths[i])
-                     , rb_str_new(_client->env_values[i], _client->env_value_lengths[i])
+    rb_hash_aset(hash, env_field(&_client->env[i])
+                     , env_value(&_client->env[i])
                      );
   }
   rb_hash_aset(hash, global_path_info, rb_hash_aref(hash, global_request_path));
@@ -223,6 +221,10 @@ void Init_ebb_ext()
 {
   VALUE mEbb = rb_define_module("Ebb");
   VALUE mFFI = rb_define_module_under(mEbb, "FFI");
+  
+  
+  eParserError = rb_define_class_under(mEbb, "ParserError", rb_eIOError);
+  
   
   /** Defines global strings in the init method. */
 #define DEF_GLOBAL(N, val) global_##N = rb_obj_freeze(rb_str_new2(val)); rb_global_variable(&global_##N)

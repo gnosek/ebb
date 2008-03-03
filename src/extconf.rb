@@ -43,4 +43,3 @@ $objs = ['ebb.o', 'ebb_ruby.o', 'parser.o']
 
 dir_config('ebb_ext')
 create_makefile('ebb_ext')
-

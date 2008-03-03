@@ -18,7 +18,7 @@
 typedef struct ebb_server ebb_server;
 typedef struct ebb_client ebb_client;
 
-#define EBB_BUFFERSIZE (40*1024)
+#define EBB_BUFFERSIZE (1024 * (80 + 32) * 2)
 #define EBB_MAX_CLIENTS 950
 #define EBB_TIMEOUT 30.0
 #define EBB_MAX_ENV 100
@@ -33,16 +33,24 @@ int ebb_client_read(ebb_client *client, char *buffer, int length);
 void ebb_client_write(ebb_client*, const char *data, int length);
 void ebb_client_finished( ebb_client *client);
 
-enum { EBB_REQUEST_METHOD
-     , EBB_REQUEST_URI
-     , EBB_FRAGMENT
-     , EBB_REQUEST_PATH
-     , EBB_QUERY_STRING
-     , EBB_HTTP_VERSION
-     , EBB_SERVER_NAME
-     , EBB_SERVER_PORT
-     , EBB_CONTENT_LENGTH
-     };
+
+struct ebb_env_item {
+  enum { EBB_FIELD_VALUE_PAIR
+       , EBB_REQUEST_METHOD
+       , EBB_REQUEST_URI
+       , EBB_FRAGMENT
+       , EBB_REQUEST_PATH
+       , EBB_QUERY_STRING
+       , EBB_HTTP_VERSION
+       , EBB_SERVER_NAME
+       , EBB_SERVER_PORT
+       , EBB_CONTENT_LENGTH
+       } type;
+ const char *field;
+ int field_length;
+ const char *value;
+ int value_length;
+};
 
 struct ebb_client {
   EBB_TCP_COMMON
@@ -67,10 +75,7 @@ struct ebb_client {
   
   /* the ENV structure */
   int env_size;
-  const char *env_fields[EBB_MAX_ENV];
-  int  env_field_lengths[EBB_MAX_ENV];
-  const char *env_values[EBB_MAX_ENV];
-  int  env_value_lengths[EBB_MAX_ENV];
+  struct ebb_env_item env[EBB_MAX_ENV];
 };
 
 /*** Ebb Server ***/

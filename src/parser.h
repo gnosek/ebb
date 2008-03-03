@@ -17,6 +17,7 @@ typedef void (*field_cb)(void *data, const char *field, size_t flen, const char 
 
 typedef struct http_parser { 
   int cs;
+  int overflow_error;
   size_t body_start;
   int content_len;
   size_t nread;
@@ -36,10 +37,9 @@ typedef struct http_parser {
   element_cb http_version;
   element_cb header_done;
   element_cb content_length;
-  
 } http_parser;
 
-int http_parser_init(http_parser *parser);
+void http_parser_init(http_parser *parser);
 int http_parser_finish(http_parser *parser);
 size_t http_parser_execute(http_parser *parser, const char *data, size_t len, size_t off);
 int http_parser_has_error(http_parser *parser);

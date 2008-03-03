@@ -32,54 +32,40 @@
 static int server_socket(const int port);
 static int server_socket_unix(const char *path, int access_mask);
 
-#define env_add(client, field,flen,value,vlen)                              \
-  client->env_fields[client->env_size] = field;                             \
-  client->env_field_lengths[client->env_size] = flen;                       \
-  client->env_values[client->env_size] = value;                             \
-  client->env_value_lengths[client->env_size] = vlen;                       \
-  client->env_size += 1;                                                     
-#define env_add_const(client,field,value,vlen)                              \
-  client->env_fields[client->env_size] = NULL;                              \
-  client->env_field_lengths[client->env_size] = field;                      \
-  client->env_values[client->env_size] = value;                             \
-  client->env_value_lengths[client->env_size] = vlen;                       \
-  client->env_size += 1;                                                     
-#define env_error(client)                                                   \
-  client->env_fields[client->env_size] = NULL;                              \
-  client->env_field_lengths[client->env_size] = -1;                         \
-  client->env_values[client->env_size] = NULL;                              \
-  client->env_value_lengths[client->env_size] = -1;                         \
-  client->env_size += 1;                                                     
-
-int env_has_error(ebb_client *client)
+void env_add(ebb_client *client, const char *field, int flen, const char *value, int vlen)
 {
-  int i;
-  for(i = 0; i < client->env_size; i++)
-    if(client->env_field_lengths[i] < 0)
-      return TRUE;
-  return FALSE;
+  if(client->env_size >= EBB_MAX_ENV) {
+    client->parser.overflow_error = TRUE;
+    return;
+  }
+  client->env[client->env_size].type = EBB_FIELD_VALUE_PAIR;
+  client->env[client->env_size].field = field;
+  client->env[client->env_size].field_length = flen;
+  client->env[client->env_size].value = value;
+  client->env[client->env_size].value_length = vlen;
+  client->env_size += 1;
 }
 
-/** Defines common length and error messages for input length validation. */
-#define DEF_MAX_LENGTH(N,length) const size_t MAX_##N##_LENGTH = length; const char *MAX_##N##_LENGTH_ERR = "HTTP Parse Error: HTTP element " # N  " is longer than the " # length " allowed length."
 
-/** Validates the max length of given input and throws an exception if over. */
-#define VALIDATE_MAX_LENGTH(len, N) if(len > MAX_##N##_LENGTH) { env_error(client); g_message(MAX_##N##_LENGTH_ERR); }
-
-/* Defines the maximum allowed lengths for various input elements.*/
-DEF_MAX_LENGTH(FIELD_NAME, 256);
-DEF_MAX_LENGTH(FIELD_VALUE, 80 * 1024);
-DEF_MAX_LENGTH(REQUEST_URI, 1024 * 12);
-DEF_MAX_LENGTH(FRAGMENT, 1024); /* Don't know if this length is specified somewhere or not */
-DEF_MAX_LENGTH(REQUEST_PATH, 1024);
-DEF_MAX_LENGTH(QUERY_STRING, (1024 * 10));
-DEF_MAX_LENGTH(HEADER, (1024 * (80 + 32)));
+void env_add_const(ebb_client *client, int type, const char *value, int vlen)
+{
+  if(client->env_size >= EBB_MAX_ENV) {
+    client->parser.overflow_error = TRUE;
+    return;
+  }
+  client->env[client->env_size].type = type;
+  client->env[client->env_size].field = NULL;
+  client->env[client->env_size].field_length = -1;
+  client->env[client->env_size].value = value;
+  client->env[client->env_size].value_length = vlen;
+  client->env_size += 1;
+}
 
 void http_field_cb(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {
   ebb_client *client = (ebb_client*)(data);
-  VALIDATE_MAX_LENGTH(flen, FIELD_NAME);
-  VALIDATE_MAX_LENGTH(vlen, FIELD_VALUE);
+  assert(field != NULL);
+  assert(value != NULL);
   env_add(client, field, flen, value, vlen);
 }
 
@@ -94,7 +80,6 @@ void request_method_cb(void *data, const char *at, size_t length)
 void request_uri_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
-  VALIDATE_MAX_LENGTH(length, REQUEST_URI);
   env_add_const(client, EBB_REQUEST_URI, at, length);
 }
 
@@ -102,7 +87,6 @@ void request_uri_cb(void *data, const char *at, size_t length)
 void fragment_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
-  VALIDATE_MAX_LENGTH(length, FRAGMENT);
   env_add_const(client, EBB_FRAGMENT, at, length);
 }
 
@@ -110,7 +94,6 @@ void fragment_cb(void *data, const char *at, size_t length)
 void request_path_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
-  VALIDATE_MAX_LENGTH(length, REQUEST_PATH);
   env_add_const(client, EBB_REQUEST_PATH, at, length);
 }
 
@@ -118,7 +101,6 @@ void request_path_cb(void *data, const char *at, size_t length)
 void query_string_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
-  VALIDATE_MAX_LENGTH(length, QUERY_STRING);
   env_add_const(client, EBB_QUERY_STRING, at, length);
 }
 
@@ -246,6 +228,7 @@ void* read_body_into_file(void *_client)
   }
   rewind(tmpfile);
   // g_debug("%d bytes written to file %s", written, client->upload_file_filename);
+  dispatch(client);
   return NULL;
 error:
   ebb_client_close(client);
@@ -264,15 +247,17 @@ void on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
   
   ssize_t read = recv( client->fd
                      , client->request_buffer + client->read
-                     , EBB_BUFFERSIZE - client->read //- 1 /* -1 is for making ragel happy below */
+                     , EBB_BUFFERSIZE - client->read
                      , 0
                      );
-  if(read <= 0) goto error; /* XXX is this the right action to take for read==0 ? */
+  if(read < 0) goto error; /* XXX is this the right action to take for read==0 ? */
+  if(read == 0) return;
   client->read += read;
   ev_timer_again(loop, &client->timeout_watcher);
   
+  if(client->read == EBB_BUFFERSIZE) goto error;
+  
   if(FALSE == client_finished_parsing) {
-    //client->request_buffer[client->read] = '\0'; /* make ragel happy */
     http_parser_execute( &client->parser
                        , client->request_buffer
                        , client->read
@@ -281,21 +266,21 @@ void on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
     if(http_parser_has_error(&client->parser)) goto error;
   }
   
-  if(total_request_size == client->read) {
-    ev_io_stop(loop, watcher);
-    client->nread_from_body = 0;
-    dispatch(client);
-    return;
-  }
-  
-  if(client_finished_parsing && total_request_size > EBB_BUFFERSIZE ) {
-    /* read body into file - in a thread */
-    pthread_t thread;
-    ev_io_stop(loop, watcher);
-    assert(0 <= pthread_create(&thread, NULL, read_body_into_file, client));
-    pthread_join(thread, NULL);
-    dispatch(client);
-    return;
+  if(client_finished_parsing) {
+    if(total_request_size == client->read) {
+      ev_io_stop(loop, watcher);
+      client->nread_from_body = 0;
+      dispatch(client);
+      return;
+    }
+    if(total_request_size > EBB_BUFFERSIZE ) {
+      /* read body into file - in a thread */
+      ev_io_stop(loop, watcher);
+      pthread_t thread;
+      assert(0 <= pthread_create(&thread, NULL, read_body_into_file, client));
+      pthread_detach(thread);
+      return;
+    }
   }
   return;
 error:
@@ -709,4 +694,3 @@ static int server_socket_unix(const char *path, int access_mask) {
     }
     return sfd;
 }
-
