@@ -18,10 +18,10 @@
 typedef struct ebb_server ebb_server;
 typedef struct ebb_client ebb_client;
 
-#define EBB_BUFFERSIZE (1024 * (80 + 32) * 2)
-#define EBB_MAX_CLIENTS 950
+#define EBB_BUFFERSIZE (1024 * (80 + 33))
+#define EBB_MAX_CLIENTS 200
 #define EBB_TIMEOUT 30.0
-#define EBB_MAX_ENV 100
+#define EBB_MAX_ENV 500
 #define EBB_TCP_COMMON          \
   unsigned open : 1;            \
   int fd;                       \

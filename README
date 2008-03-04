@@ -10,11 +10,12 @@ and a front-end server. It is not meant to serve static files in production.
 
 ## Design
 
-The design is similar to the 
-[Evented Mongrel](http://swiftiply.swiftcore.org/mongrel.html) web server; 
-except instead of using EventMachine (a ruby binding to libevent), the Ebb 
-web server is written in C and uses the 
-[libev](http://software.schmorp.de/pkg/libev.html) event loop library.
+The design is similar to the [Evented
+Mongrel](http://swiftiply.swiftcore.org/mongrel.html) web server; except
+instead of using [EventMachine](http://rubyeventmachine.com/) to drive
+network interactions, the Ebb web server handles sockets directly in C and
+employs the use of the [libev](http://software.schmorp.de/pkg/libev.html)
+event loop.
 
 Connections are processed as follows:
 

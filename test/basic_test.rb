@@ -145,7 +145,6 @@ class EnvTest < Test::Unit::TestCase
     assert_equal '/', env['REQUEST_PATH']
     assert_equal 'HTTP/1.1', env['HTTP_VERSION']
     assert_equal '/', env['REQUEST_URI']
-    assert_equal 'CGI/1.2', env['GATEWAY_INTERFACE']
     assert_equal 'GET', env['REQUEST_METHOD']    
     assert_nil env['FRAGMENT']
     assert_nil env['QUERY_STRING']
