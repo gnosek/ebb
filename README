@@ -54,10 +54,11 @@ for quick and beautiful code, but for production web servers that might handle
 thousands of requests a second, an attempt should be made to be as efficient
 as possible in processing connections.
 
-Following are some benchmarks. Please take these measurements with a grain
-of salt. Benchmarks like these are notorious for presenting an inaccurate
-or highly slanted view of how software performs. 
-The code for these can be found in the `benchmark` directory.
+Following are some benchmarks. Please take these measurements with a grain of
+salt. Benchmarks like these are notorious for presenting an inaccurate or
+highly slanted view of how software performs. These are tests using a very
+simple Rack applications, not with Ruby-on-Rails. The code for these can be
+found in the `benchmark` directory.
 
 ![Response Size](http://s3.amazonaws.com/four.livejournal/20080227/response_size.png)
 
@@ -78,8 +79,9 @@ buffer is set at 40 kilobytes before it writes to file.
 ## Contributions
 
 Contributions (patches, criticism, advice) are very welcome! The source code
-is hosted at [repo.or.cz](http://repo.or.cz/w/ebb.git). It can be retrieved 
-by executing
+is hosted at [repo.or.cz](http://repo.or.cz/w/ebb.git) (and also mirrored at
+[github](http://github.com/ry/ebb/tree/master)). It can be retrieved by
+executing
 
 `git clone http://repo.or.cz/r/ebb.git`
 
