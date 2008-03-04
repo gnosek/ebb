@@ -36,15 +36,29 @@ Because Ebb is written mostly in C, other language bindings can be added to
 make it useful to Non-Ruby frameworks. For example, a Python WSGI interface is
 forthcoming.
 
-## Download
+## Install
 
 The Ruby binding is available as a Ruby Gem. It can be install by executing
 
   `gem install ebb`
 
-Ebb depends on having glib2 headers and libraries installed. (Easily available
-on any UNIX system.) Manual download can be done at
+Ebb depends on having glib2 headers and libraries installed. For example, in
+Macintosh if one is using Darwin ports then the following should do the trick
+  
+  `port install glib2`
+  
+Downloads are available at
 the [RubyForge project page](http://rubyforge.org/frs/?group_id=5640).
+
+## Running
+
+Using the executable `ebb_rails` one can start Ebb with a Rails project. Use
+`ebb_rails -h` to see all of the options but to start one can try
+  
+  `cd my_rails_project/; ebb_rails start`
+  
+To use Ebb with a different framework you will have to do a small amount of
+hacking at the moment! :)
 
 ## Why?
 

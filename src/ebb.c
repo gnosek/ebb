@@ -111,19 +111,15 @@ void http_version_cb(void *data, const char *at, size_t length)
   env_add_const(client, EBB_HTTP_VERSION, at, length);
 }
 
-int atoi_len(const char *str, int len)
-{
-  int i, mult, retr = 0;
-  for(mult=1, i=len-1; i>=0; i--, mult*=10)
-    retr += (str[i] - '0') * mult;
-  return retr;
-}
 
 void content_length_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_CONTENT_LENGTH, at, length);
-  client->content_length = atoi_len(at, length);
+  /* atoi_length - why isn't this in the statndard library? i hate c */
+  int i, mult;
+  for(mult=1, i=length-1; i>=0; i--, mult*=10)
+    client->content_length += (at[i] - '0') * mult;
 }
 
 

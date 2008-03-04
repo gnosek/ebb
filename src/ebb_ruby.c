@@ -27,6 +27,10 @@ static VALUE global_http_host;
 /* Variables with a leading underscore are C-level variables */
 
 #define ASCII_UPPER(ch) ('a' <= ch && ch <= 'z' ? ch - 'a' + 'A' : ch)
+#ifndef RSTRING_PTR
+# define RSTRING_PTR(s) (RSTRING(s)->ptr)
+# define RSTRING_LEN(s) (RSTRING(s)->len)
+#endif
 
 VALUE client_new(ebb_client *_client)
 {
