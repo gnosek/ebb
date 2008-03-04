@@ -88,7 +88,7 @@ struct ebb_client {
 
 typedef void (*ebb_request_cb)(ebb_client*, void*);
 
-ebb_server* ebb_server_alloc();
+ebb_server* ebb_server_alloc(void);
 void ebb_server_free(ebb_server*);
 void ebb_server_init( ebb_server *server
                     , struct ev_loop *loop

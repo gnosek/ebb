@@ -9,10 +9,10 @@ def pkgconfig(*packages, **kw):
         kw.setdefault(flag_map.get(token[:2]), []).append(token[2:])
     return kw
 
-ebb_ext = Extension( "ebb_ext"
-                   , ["src/ebb_python.c"]
-                   , **pkgconfig('glib-2.0', include_dirs = ['libev'])
-                   )
+ebb = Extension( "ebb"
+               , ["src/ebb_python.c", "src/ebb.c", "src/parser.c"]
+               , **pkgconfig('glib-2.0', include_dirs = ['libev'])
+               )
 
 setup( name = "Ebb"
      , description = "a wsgi web server"
@@ -20,5 +20,5 @@ setup( name = "Ebb"
      , author = "ry dahl"
      , author_email = "ry at tiny clouds dot org"
      , url = "http://ebb.rubyforge.org/"
-     , ext_modules = [ebb_ext]
+     , ext_modules = [ebb]
      )

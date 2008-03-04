@@ -79,8 +79,8 @@ spec = Gem::Specification.new do |s|
   s.description = ''
   s.name = 'ebb'
   s.author = 'ry dahl'
-  s.email = 'ry@tinyclouds.org'
-  s.homepage = 'http://repo.or.cz/w/ebb.git'
+  s.email = 'ry at tiny clouds dot org'
+  s.homepage = 'http://ebb.rubyforge.org'
   s.version = File.read(dir("VERSION")).gsub(/\s/,'')
   s.requirements << 'none'
   s.rubyforge_project = 'ebb'

@@ -15,7 +15,6 @@ module Ebb
       'SCRIPT_NAME' => '',
       'SERVER_SOFTWARE' => "Ebb #{Ebb::VERSION}",
       'SERVER_PROTOCOL' => 'HTTP/1.1',
-      'GATEWAY_INTERFACE' => 'CGI/1.2',
       'rack.version' => [0, 1],
       'rack.errors' => STDERR,
       'rack.url_scheme' => 'http',
