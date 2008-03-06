@@ -61,6 +61,7 @@ void env_add_const(ebb_client *client, int type, const char *value, int vlen)
   client->env_size += 1;
 }
 
+
 void http_field_cb(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {
   ebb_client *client = (ebb_client*)(data);
@@ -197,8 +198,6 @@ void* read_body_into_file(void *_client)
     written += r;
   }
   
-  // g_debug("wrote request header to file. written: %d, content_length: %d", written, client->content_length);
-  
   int bufsize = 5*1024;
   char buffer[bufsize];
   size_t received;
@@ -285,6 +284,7 @@ error:
   if(read < 0) g_message("Error recving data: %s", strerror(errno));
   ebb_client_close(client);
 }
+
 
 void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
 {
