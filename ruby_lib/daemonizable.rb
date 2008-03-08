@@ -35,7 +35,11 @@ end
 # * killing the process gracefully
 module Daemonizable
   attr_accessor :pid_file, :log_file, :timeout
-  
+
+  def self.included(base)
+    base.extend(ClassMethods)
+  end  
+
   def pid
     File.exist?(pid_file) ? open(pid_file).read : nil
   end
@@ -60,34 +64,30 @@ module Daemonizable
     end
   end
   
-  # Kill the process which PID is stored in +pid_file+.
-  def self.kill(pid_file, timeout=60)
-    if pid = open(pid_file).read
-      pid = pid.to_i
-      print "Sending INT signal to process #{pid} ... "
-      begin
-        Process.kill('INT', pid)
-        Timeout.timeout(timeout) do
-          sleep 0.1 while Process.running?(pid)
-        end
-      rescue Timeout::Error
-        print "timeout, Sending KILL signal ... "
+  module ClassMethods
+    # Kill the process which PID is stored in +pid_file+.
+    def kill(pid_file, timeout=60)
+      raise ArgumentError, 'You must specify a pid_file to stop deamonized server' unless pid_file 
+      
+      if pid = File.read(pid_file)
+        pid = pid.to_i
+        
         Process.kill('KILL', pid)
+        puts "stopped!"
+      else
+        puts "Can't stop process, no PID found in #{@pid_file}"
       end
-      puts "stopped!"
-    else
-      puts "Can't stop process, no PID found in #{@pid_file}"
+    rescue Errno::ESRCH # No such process
+      puts "process not found!"
+    ensure
+      File.delete(pid_file) rescue nil
     end
-  rescue Errno::ESRCH # No such process
-    puts "process not found!"
-  ensure
-    File.delete(pid_file) rescue nil
   end
-  
+
   private
   
   def remove_pid_file
-    File.delete(@pid_file) if @pid_file && File.exists?(@pid_file)
+    File.delete(@pid_file) if @pid_file && File.exists?(@pid_file) && Process.pid == File.read(@pid_file)
   end
   
   def write_pid_file
