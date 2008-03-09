@@ -7,6 +7,8 @@
 #include <fcntl.h>
 #include <ebb.h>
 #include <ev.h>
+#include <pthread.h>
+#include <glib.h>
 
 static VALUE cClient;
 static VALUE global_http_prefix;
@@ -29,6 +31,10 @@ static VALUE global_http_host;
  */
 static ebb_server *server;
 struct ev_loop *loop;
+static notify_fd;
+static pthread_mutex_t waiting_clients_lock = PTHREAD_MUTEX_INITIALIZER;
+static GQueue *waiting_clients;
+
 
 /* Variables with a leading underscore are C-level variables */
 
@@ -38,39 +44,60 @@ struct ev_loop *loop;
 # define RSTRING_LEN(s) (RSTRING(s)->len)
 #endif
 
-void request_cb(ebb_client *client, void *data)
+void request_cb(ebb_client *client, void *_)
 {
-  VALUE waiting_clients = (VALUE)data;
-  VALUE rb_client = Data_Wrap_Struct(cClient, 0, 0, client);
-  rb_ary_push(waiting_clients, rb_client);
+  pthread_mutex_lock(&waiting_clients_lock);
+  g_queue_push_tail(waiting_clients, (void*)client);
+  pthread_mutex_unlock(&waiting_clients_lock);
+  
+  assert(notify_fd > 2);
+  assert(1 == write(notify_fd, "N", 1));
+}
+
+static void
+oneshot_timeout (struct ev_loop *loop, struct ev_timer *w, int revents) {;}
+
+static void* process_connections(void *_)
+{
+  ev_loop(loop, 0);
+}
+
+VALUE server_next_client(VALUE _)
+{
+  ebb_client *client;
+  VALUE rb_client;
+  
+  pthread_mutex_lock(&waiting_clients_lock);
+  client = g_queue_pop_head(waiting_clients);
+  pthread_mutex_unlock(&waiting_clients_lock);
+  
+  if(client == NULL)
+    rb_client = Qnil;
+  else
+    rb_client = Data_Wrap_Struct(cClient, 0, 0, client);
+  return rb_client;
 }
 
 VALUE server_listen_on_port(VALUE _, VALUE port)
 {
   if(ebb_server_listen_on_port(server, FIX2INT(port)) < 0)
     rb_sys_fail("Problem listening on port");
-  return Qnil;
-}
-
-static void
-oneshot_timeout (struct ev_loop *loop, struct ev_timer *w, int revents) {;}
-
-VALUE server_process_connections(VALUE _)
-{
-  ev_timer timeout;
-  ev_timer_init (&timeout, oneshot_timeout, 0.01, 0.);
-  ev_timer_start (loop, &timeout);
-   
-  ev_loop(loop, EVLOOP_ONESHOT);
-  /* XXX: Need way to know when the loop is finished...
-   * should return true or false */
-   
-  ev_timer_stop(loop, &timeout);
+  pthread_t thread;
+  int fildes[2];
+  assert(0 <= pipe(fildes));
   
-  if(server->open)
-    return Qtrue;
-  else
-    return Qfalse;
+  /* the read side is blocking */
+  int flags = fcntl(fildes[0], F_GETFL, 0);
+  assert(0 <= fcntl(fildes[0], F_SETFL, flags & ~O_NONBLOCK));
+  /* the write side is nonblocking */
+  flags = fcntl(fildes[1], F_GETFL, 0);
+  assert(0 <= fcntl(fildes[1], F_SETFL, flags | O_NONBLOCK));
+  notify_fd = fildes[1];
+  
+  assert(0 <= pthread_create(&thread, NULL, process_connections, NULL));
+  pthread_detach(thread);
+  
+  return INT2FIX(fildes[0]);
 }
 
 
@@ -215,8 +242,9 @@ void Init_ebb_ext()
   DEF_GLOBAL(path_info, "PATH_INFO");
   DEF_GLOBAL(content_length, "CONTENT_LENGTH");
   DEF_GLOBAL(http_host, "HTTP_HOST");
+
+  rb_define_singleton_method(mFFI, "server_next_client", server_next_client, 0);
   
-  rb_define_singleton_method(mFFI, "server_process_connections", server_process_connections, 0);
   rb_define_singleton_method(mFFI, "server_listen_on_port", server_listen_on_port, 1);
   rb_define_singleton_method(mFFI, "server_unlisten", server_unlisten, 0);
   
@@ -231,7 +259,8 @@ void Init_ebb_ext()
   /* initialize ebb_server */
   loop = ev_default_loop (0);
   server = ebb_server_alloc();
-  VALUE waiting_clients = rb_ary_new();
-  rb_iv_set(mFFI, "@waiting_clients", waiting_clients);
-  ebb_server_init(server, loop, request_cb, (void*)waiting_clients);
+  
+  waiting_clients = g_queue_new();
+  
+  ebb_server_init(server, loop, request_cb, NULL);
 }

@@ -124,6 +124,47 @@ void content_length_cb(void *data, const char *at, size_t length)
 }
 
 
+static void
+on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents)
+{
+  ebb_client *client = (ebb_client*)(watcher->data);
+  ssize_t sent;
+  
+  if(client->headers_sent == FALSE)
+    return;
+  
+  if(EV_ERROR & revents) {
+    g_message("on_client_writable() got error event, closing peer");
+    return;
+  }
+  
+  //if(client->written != 0)
+  //  g_debug("total written: %d", (int)(client->written));
+  
+  sent = send( client->fd
+             , client->response_buffer->str + sizeof(gchar)*(client->written)
+             , client->response_buffer->len - client->written
+             , 0
+             );
+  if(sent < 0) {
+#ifdef DEBUG
+    g_message("Error writing: %s", strerror(errno));
+#endif
+    ebb_client_close(client);
+    return;
+  }
+  client->written += sent;
+  
+  assert(client->written <= client->response_buffer->len);
+  //g_message("wrote %d bytes. total: %d", (int)sent, (int)(client->written));
+  
+  ev_timer_again(loop, &(client->timeout_watcher));
+  
+  if(client->written == client->response_buffer->len)
+    ebb_client_close(client);
+}
+
+
 const char* localhost_str = "0.0.0.0";
 void dispatch(ebb_client *client)
 {
@@ -143,6 +184,12 @@ void dispatch(ebb_client *client)
                         , strlen(server->port)
                         );
   }
+  
+  client->write_watcher.data = client;
+  ev_init (&client->write_watcher, on_client_writable);
+  ev_io_set (&client->write_watcher, client->fd, EV_WRITE | EV_ERROR);
+  ev_io_start(server->loop, &client->write_watcher);
+  
   server->request_cb(client, server->request_cb_data);
 }
 
@@ -533,42 +580,6 @@ void ebb_client_close(ebb_client *client)
 }
 
 
-void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents)
-{
-  ebb_client *client = (ebb_client*)(watcher->data);
-  ssize_t sent;
-  
-  if(EV_ERROR & revents) {
-    g_message("on_client_writable() got error event, closing peer");
-    return;
-  }
-  
-  //if(client->written != 0)
-  //  g_debug("total written: %d", (int)(client->written));
-  
-  sent = send( client->fd
-             , client->response_buffer->str + sizeof(gchar)*(client->written)
-             , client->response_buffer->len - client->written
-             , 0
-             );
-  if(sent < 0) {
-#ifdef DEBUG
-    g_message("Error writing: %s", strerror(errno));
-#endif
-    ebb_client_close(client);
-    return;
-  }
-  client->written += sent;
-  
-  assert(client->written <= client->response_buffer->len);
-  //g_message("wrote %d bytes. total: %d", (int)sent, (int)(client->written));
-  
-  ev_timer_again(loop, &(client->timeout_watcher));
-  
-  if(client->written == client->response_buffer->len)
-    ebb_client_close(client);
-}
-
 void ebb_client_write_status(ebb_client *client, int status, const char *human_status)
 {
   assert(client->status_sent == FALSE);
@@ -600,7 +611,7 @@ void ebb_client_write(ebb_client *client, const char *data, int length)
 void ebb_client_finished(ebb_client *client)
 {
   assert(client->open);
-  assert(FALSE == ev_is_active(&(client->write_watcher)));
+  assert(ev_is_active(&client->write_watcher));
   
   /* assure the socket is still in non-blocking mode
    * in the ruby binding, for example, i change this flag 
@@ -611,12 +622,8 @@ void ebb_client_finished(ebb_client *client)
     ebb_client_close(client);
     return;
   }
-  
   client->written = 0;
-  client->write_watcher.data = client;
-  ev_init (&(client->write_watcher), on_client_writable);
-  ev_io_set (&(client->write_watcher), client->fd, EV_WRITE | EV_ERROR);
-  ev_io_start(client->server->loop, &(client->write_watcher));
+  client->headers_sent = TRUE;
 }
 
 

@@ -1,18 +1,13 @@
 # A ruby binding to the ebb web server
 # Copyright (c) 2007 Ry Dahl <ry.d4hl@gmail.com>
 # This software is released under the "MIT License". See README file for details.
+
 module Ebb
   LIBDIR = File.dirname(__FILE__)
+  require LIBDIR + '/../src/ebb_ext'
   VERSION = File.read(LIBDIR + "/../VERSION").gsub(/\s/,'')
   autoload :Runner, LIBDIR + '/ebb/runner'
-end
-
-require Ebb::LIBDIR + '/../src/ebb_ext'
-
-module Ebb
-  # "Gasp! No Server class! But this is Object Oriented Programming - we
-  # classes for servers!", you say. Not when there always will be 
-  # exactly one server per virtual machine.
+  
   def self.start_server(app, options={})
     port = (options[:port] || 4001).to_i
     #socket = options[:socket]
@@ -20,20 +15,17 @@ module Ebb
     
     trap('INT')  { @running = false }
     
-    FFI::server_listen_on_port(port)
-    
+    notify_fd = FFI::server_listen_on_port(port)
+    notifier = IO.new(notify_fd)
     puts "Ebb listening at http://0.0.0.0:#{port}/"
-    
-    @running = true
-    while FFI::server_process_connections() and @running
-      unless FFI::waiting_clients.empty?
-        if $DEBUG and  $ebb_waiting_clients.length > 1
-          puts "#{FFI::waiting_clients.length} waiting clients"
-        end
-        client = FFI::waiting_clients.shift
+    while notifier.read(1)
+      if client = FFI::server_next_client()
+        # puts "#{FFI::waiting_clients.length} waiting clients"
+        # p client
         process_client(app, client)
       end
     end
+    
     puts "Ebb unlistening"
     FFI::server_unlisten()
   end
@@ -70,10 +62,8 @@ module Ebb
     client.finished
   end
   
-  module FFI
-    def self.waiting_clients
-      @waiting_clients
-    end
+  def FFI.waiting_clients
+    @waiting_clients
   end
   
   class Client

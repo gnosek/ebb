@@ -34,7 +34,7 @@ end
 dir = File.dirname(__FILE__)
 libev_dir = File.expand_path(dir + '/../libev')
 
-$LDFLAGS << " -lpthread "
+$LDFLAGS << " -lpthread -lprofiler "
 $CFLAGS << " -I#{libev_dir} " << flags.join(' ')
 $defs << "-DRUBY_VERSION_CODE=#{RUBY_VERSION.gsub(/\D/, '')}"
 

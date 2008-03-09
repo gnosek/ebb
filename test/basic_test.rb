@@ -10,7 +10,7 @@ PORT = 4044
 class EbbTest < Test::Unit::TestCase
   def setup
     @pid = fork do
-      STDOUT.reopen "/dev/null", "a"
+      #STDOUT.reopen "/dev/null", "a"
       server = Ebb::start_server(self, :port => PORT)
     end
     sleep 0.5
