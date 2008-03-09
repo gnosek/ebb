@@ -114,7 +114,7 @@ class ServerTest
   
   def start_ebb
     require File.dirname(__FILE__) + '/../ruby_lib/ebb'
-    server = Ebb::Server.run(app, :port => @port)
+    server = Ebb::start_server(app, :port => @port)
   end
   
   def start_mongrel

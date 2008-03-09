@@ -8,7 +8,6 @@
 #include <ebb.h>
 #include <ev.h>
 
-static VALUE cServer;
 static VALUE cClient;
 static VALUE global_http_prefix;
 static VALUE global_request_method;
@@ -24,6 +23,13 @@ static VALUE global_path_info;
 static VALUE global_content_length;
 static VALUE global_http_host;
 
+/* You don't want to run more than one server per Ruby VM. Really
+ * I'm making this explicit by not defining a Ebb::Server class but instead
+ * initializing a single server and single event loop on module load.
+ */
+static ebb_server *server;
+struct ev_loop *loop;
+
 /* Variables with a leading underscore are C-level variables */
 
 #define ASCII_UPPER(ch) ('a' <= ch && ch <= 'z' ? ch - 'a' + 'A' : ch)
@@ -32,86 +38,45 @@ static VALUE global_http_host;
 # define RSTRING_LEN(s) (RSTRING(s)->len)
 #endif
 
-VALUE client_new(ebb_client *_client)
+void request_cb(ebb_client *client, void *data)
 {
-  VALUE client = Data_Wrap_Struct(cClient, 0, 0, _client);
-  return client;
+  VALUE waiting_clients = (VALUE)data;
+  VALUE rb_client = Data_Wrap_Struct(cClient, 0, 0, client);
+  rb_ary_push(waiting_clients, rb_client);
 }
 
-
-void request_cb(ebb_client *_client, void *data)
+VALUE server_listen_on_port(VALUE _, VALUE port)
 {
-  VALUE server = (VALUE)data;
-  VALUE waiting_clients;
-  VALUE client = client_new(_client);
-  
-  waiting_clients = rb_iv_get(server, "@waiting_clients");
-  rb_ary_push(waiting_clients, client);
+  if(ebb_server_listen_on_port(server, FIX2INT(port)) < 0)
+    rb_sys_fail("Problem listening on port");
+  return Qnil;
 }
-
-
-VALUE server_alloc(VALUE self)
-{
-  struct ev_loop *loop = ev_default_loop (0);
-  ebb_server *_server = ebb_server_alloc();
-  VALUE server = Qnil;
-  server = Data_Wrap_Struct(cServer, 0, ebb_server_free, _server);
-  ebb_server_init(_server, loop, request_cb, (void*)server);
-  return server; 
-}
-
-
-VALUE server_listen_on_port(VALUE x, VALUE server, VALUE port)
-{
-  ebb_server *_server;
-  Data_Get_Struct(server, ebb_server, _server);
-  int r = ebb_server_listen_on_port(_server, FIX2INT(port));
-  return r < 0 ? Qfalse : Qtrue;
-}
-
-
-VALUE server_listen_on_socket(VALUE x, VALUE server, VALUE socketpath)
-{
-  ebb_server *_server;
-  Data_Get_Struct(server, ebb_server, _server);
-  int r = ebb_server_listen_on_socket(_server, StringValuePtr(socketpath));
-  return r < 0 ? Qfalse : Qtrue;
-}
-
 
 static void
 oneshot_timeout (struct ev_loop *loop, struct ev_timer *w, int revents) {;}
 
-
-VALUE server_process_connections(VALUE x, VALUE server)
+VALUE server_process_connections(VALUE _)
 {
-  ebb_server *_server;
-  VALUE host, port;
-  
-  Data_Get_Struct(server, ebb_server, _server);
-  
   ev_timer timeout;
-  ev_timer_init (&timeout, oneshot_timeout, 0.5, 0.);
-  ev_timer_start (_server->loop, &timeout);
+  ev_timer_init (&timeout, oneshot_timeout, 0.01, 0.);
+  ev_timer_start (loop, &timeout);
    
-  ev_loop(_server->loop, EVLOOP_ONESHOT);
+  ev_loop(loop, EVLOOP_ONESHOT);
   /* XXX: Need way to know when the loop is finished...
    * should return true or false */
    
-  ev_timer_stop(_server->loop, &timeout);
+  ev_timer_stop(loop, &timeout);
   
-  if(_server->open)
+  if(server->open)
     return Qtrue;
   else
     return Qfalse;
 }
 
 
-VALUE server_unlisten(VALUE x, VALUE server)
+VALUE server_unlisten(VALUE _)
 {
-  ebb_server *_server;
-  Data_Get_Struct(server, ebb_server, _server);
-  ebb_server_unlisten(_server);
+  ebb_server_unlisten(server);
   return Qnil;
 }
 
@@ -156,7 +121,7 @@ VALUE env_value(struct ebb_env_item *item)
 }
 
 
-VALUE client_env(VALUE x, VALUE client)
+VALUE client_env(VALUE _, VALUE client)
 {
   ebb_client *_client;
   VALUE hash = rb_hash_new();
@@ -173,7 +138,7 @@ VALUE client_env(VALUE x, VALUE client)
 }
 
 
-VALUE client_read_input(VALUE x, VALUE client, VALUE size)
+VALUE client_read_input(VALUE _, VALUE client, VALUE size)
 {
   ebb_client *_client;
   GString *_string;
@@ -196,7 +161,7 @@ VALUE client_read_input(VALUE x, VALUE client, VALUE size)
   return string;
 }
 
-VALUE client_write_status(VALUE x, VALUE client, VALUE status, VALUE human_status)
+VALUE client_write_status(VALUE _, VALUE client, VALUE status, VALUE human_status)
 {
   ebb_client *_client;
   Data_Get_Struct(client, ebb_client, _client);
@@ -204,7 +169,7 @@ VALUE client_write_status(VALUE x, VALUE client, VALUE status, VALUE human_statu
   return Qnil;
 }
 
-VALUE client_write_header(VALUE x, VALUE client, VALUE field, VALUE value)
+VALUE client_write_header(VALUE _, VALUE client, VALUE field, VALUE value)
 {
   ebb_client *_client;
   Data_Get_Struct(client, ebb_client, _client);
@@ -212,7 +177,7 @@ VALUE client_write_header(VALUE x, VALUE client, VALUE field, VALUE value)
   return Qnil;
 }
 
-VALUE client_write(VALUE x, VALUE client, VALUE string)
+VALUE client_write(VALUE _, VALUE client, VALUE string)
 {
   ebb_client *_client;
   Data_Get_Struct(client, ebb_client, _client);
@@ -221,7 +186,7 @@ VALUE client_write(VALUE x, VALUE client, VALUE string)
 }
 
 
-VALUE client_finished(VALUE x, VALUE client)
+VALUE client_finished(VALUE _, VALUE client)
 {
   ebb_client *_client;
   Data_Get_Struct(client, ebb_client, _client);
@@ -251,12 +216,9 @@ void Init_ebb_ext()
   DEF_GLOBAL(content_length, "CONTENT_LENGTH");
   DEF_GLOBAL(http_host, "HTTP_HOST");
   
-  cServer = rb_define_class_under(mEbb, "Server", rb_cObject);
-  rb_define_alloc_func(cServer, server_alloc);
-  rb_define_singleton_method(mFFI, "server_process_connections", server_process_connections, 1);
-  rb_define_singleton_method(mFFI, "server_listen_on_port", server_listen_on_port, 2);
-  rb_define_singleton_method(mFFI, "server_listen_on_socket", server_listen_on_socket, 2);
-  rb_define_singleton_method(mFFI, "server_unlisten", server_unlisten, 1);
+  rb_define_singleton_method(mFFI, "server_process_connections", server_process_connections, 0);
+  rb_define_singleton_method(mFFI, "server_listen_on_port", server_listen_on_port, 1);
+  rb_define_singleton_method(mFFI, "server_unlisten", server_unlisten, 0);
   
   cClient = rb_define_class_under(mEbb, "Client", rb_cObject);
   rb_define_singleton_method(mFFI, "client_read_input", client_read_input, 2);
@@ -265,4 +227,11 @@ void Init_ebb_ext()
   rb_define_singleton_method(mFFI, "client_write", client_write, 2);
   rb_define_singleton_method(mFFI, "client_finished", client_finished, 1);
   rb_define_singleton_method(mFFI, "client_env", client_env, 1);
+  
+  /* initialize ebb_server */
+  loop = ev_default_loop (0);
+  server = ebb_server_alloc();
+  VALUE waiting_clients = rb_ary_new();
+  rb_iv_set(mFFI, "@waiting_clients", waiting_clients);
+  ebb_server_init(server, loop, request_cb, (void*)waiting_clients);
 }

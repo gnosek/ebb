@@ -446,13 +446,54 @@ void ebb_server_listen(ebb_server *server)
 
 int ebb_server_listen_on_port(ebb_server *server, const int port)
 {
-  int fd = server_socket(port);
-  if(fd < 0) return 0;
+  int sfd = -1;
+  struct linger ling = {0, 0};
+  struct sockaddr_in addr;
+  int flags = 1;
+  
+  if ((sfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+    perror("socket()");
+    goto error;
+  }
+  
+  flags = fcntl(sfd, F_GETFL, 0);
+  if(fcntl(sfd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    perror("setting O_NONBLOCK");
+    goto error;
+  }
+  
+  flags = 1;
+  setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (void *)&flags, sizeof(flags));
+  setsockopt(sfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags));
+  setsockopt(sfd, SOL_SOCKET, SO_LINGER, (void *)&ling, sizeof(ling));
+  setsockopt(sfd, IPPROTO_TCP, TCP_NODELAY, (void *)&flags, sizeof(flags));
+  
+  /*
+   * the memset call clears nonstandard fields in some impementations
+   * that otherwise mess things up.
+   */
+  memset(&addr, 0, sizeof(addr));
+  
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(port);
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  
+  if (bind(sfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    perror("bind()");
+    goto error;
+  }
+  if (listen(sfd, EBB_MAX_CLIENTS) < 0) {
+    perror("listen()");
+    goto error;
+  }
+  server->fd = sfd;
   server->port = malloc(sizeof(char)*8); /* for easy access to the port */
   sprintf(server->port, "%d", port);
-  server->fd = fd;
   ebb_server_listen(server);
-  return fd;
+  return server->fd;
+error:
+  if(sfd > 0) close(sfd);
+  return -1;
 }
 
 
@@ -608,53 +649,6 @@ int ebb_client_read(ebb_client *client, char *buffer, int length)
 }
 
 /* The following socket creation routines are modified and stolen from memcached */
-
-static int server_socket(const int port) {
-    int sfd;
-    struct linger ling = {0, 0};
-    struct sockaddr_in addr;
-    int flags =1;
-    
-    if ((sfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        perror("socket()");
-        return -1;
-    }
-    
-    if ((flags = fcntl(sfd, F_GETFL, 0)) < 0 ||
-        fcntl(sfd, F_SETFL, flags | O_NONBLOCK) < 0) {
-        perror("setting O_NONBLOCK");
-        close(sfd);
-        return -1;
-    }
-    
-    flags = 1;
-    setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (void *)&flags, sizeof(flags));
-    setsockopt(sfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags));
-    setsockopt(sfd, SOL_SOCKET, SO_LINGER, (void *)&ling, sizeof(ling));
-    setsockopt(sfd, IPPROTO_TCP, TCP_NODELAY, (void *)&flags, sizeof(flags));
-    
-    /*
-     * the memset call clears nonstandard fields in some impementations
-     * that otherwise mess things up.
-     */
-    memset(&addr, 0, sizeof(addr));
-    
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    
-    if (bind(sfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
-        perror("bind()");
-        close(sfd);
-        return -1;
-    }
-    if (listen(sfd, EBB_MAX_CLIENTS) == -1) {
-        perror("listen()");
-        close(sfd);
-        return -1;
-    }
-    return sfd;
-}
 
 
 static int server_socket_unix(const char *path, int access_mask) {

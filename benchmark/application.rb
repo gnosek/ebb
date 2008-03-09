@@ -78,7 +78,6 @@ if $0 == __FILE__
   require 'ruby-debug'
   Debugger.start
   
-  server = Ebb::Server.new(SimpleApp.new, :port => 4001)
   puts "Ebb started on http://0.0.0.0:4001/"
-  server.start
+  server = Ebb::start_server(SimpleApp.new, :port => 4001)
 end

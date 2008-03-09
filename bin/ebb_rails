@@ -10,70 +10,21 @@ module Rack
   end
 end
 
-options = {
-  :root     => Dir.pwd,
-  :environment  => 'development',
-  :hort     => '0.0.0.0',
-  :port     => 3000,
-  :timeout  => 60
-}
-
-
-opts = OptionParser.new do |opts|
-  opts.banner = "Usage: ebb_rails [options] start|stop"
-
-  opts.separator ""
-  opts.separator "Server options:"
-
-#  opts.on("-s", "--socket SOCKET", "listen on socket")                   { |socket| options[:socket] = socket }
-  opts.on("-p", "--port PORT", "use PORT (default: 3000)")               { |port| options[:port] = port }
-  opts.on("-e", "--env ENV", "Rails environment (default: development)") { |env| options[:environment] = env }
-  opts.on("-c", "--chdir PATH", "Rails root dir (default: current dir)") { |dir| options[:root] = dir }
-  opts.on("-d", "--daemonize", "Daemonize")                              { options[:daemonize] = true }
-  opts.on("-l", "--log-file FILE", "File to redirect output")            { |file| options[:log_file] = file }
-  opts.on("-P", "--pid-file FILE", "File to store PID")                  { |file| options[:pid_file] = file }
-  opts.on("-t", "--timeout SEC", "Request or command timeout in sec",    
-                                 "(default: #{options[:timeout]})")      { |sec| options[:timeout] = sec }
- 
-  opts.separator ""
-  opts.separator "Common options:"
-
-  opts.on_tail("-h", "--help", "Show this message") do
-    puts opts
-    exit
+Ebb::Runner.new('ebb_rails') do
+  def add_extra_options(parser, options)
+    # defaults for ebb_rails
+    options.update(
+      :environment => 'development',
+      :port => 3000
+    )
+    
+    parser.on("-e", "--env ENV", 
+            "Rails environment (default: development)") do |env| 
+      options[:environment] = env
+    end
   end
-
-  opts.on_tail('-v', '--version', "Show version") do
-    puts "Ebb #{Ebb::VERSION}"
-    exit
+  
+  def app(options)
+    Rack::Adapter::Rails.new(options)
   end
-
-  opts.parse! ARGV
-end
-
-case ARGV[0]
-  
-when 'start'
-  app = Rack::Adapter::Rails.new(options)
-  server = Ebb::Server.new(app, options)
-  
-  server.pid_file = options[:pid_file]
-  server.log_file = options[:log_file]
-  server.timeout  = options[:timeout]
-  
-  server.daemonize if options[:daemonize]
-  
-  server.start
-
-when 'stop'
-  Ebb::Server.kill options[:pid_file], options[:timeout]
-
-when nil
-  puts "Command required"
-  puts opts
-  exit 1
-  
-else
-  abort "Invalid command : #{ARGV[0]}"
-  
 end

@@ -10,9 +10,8 @@ PORT = 4044
 class EbbTest < Test::Unit::TestCase
   def setup
     @pid = fork do
-      server = Ebb::Server.new(self, :port => PORT)
       STDOUT.reopen "/dev/null", "a"
-      server.start
+      server = Ebb::start_server(self, :port => PORT)
     end
     sleep 0.5
   end
@@ -109,7 +108,7 @@ class EnvTest < Test::Unit::TestCase
   
   def setup
     @pid = fork do
-      server = Ebb::Server.new(self, :port => PORT)
+      server = Ebb::start_server(self, :port => PORT)
       STDOUT.reopen "/dev/null", "a"
       server.start
     end
@@ -171,23 +170,3 @@ class EbbRailsTest < Test::Unit::TestCase
   #     Process.kill('KILL', %x{cat /tmp/ebb.1.pid})
   #   end
 end
-
-
-
-
-# 
-# class SocketTest < Test::Unit::TestCase
-#   def test_socket_creation
-#     filename = '/tmp/ebb.socket'
-#     @pid = fork do
-#       server = Ebb::Server.new(TestApp.new, {:socket => filename})
-#       server.start
-#     end
-#     sleep(1)
-#     assert File.exists?(filename)
-#     
-#     Process.kill('KILL', @pid)
-#     
-#     assert !File.exists?(filename)
-#   end
-# end

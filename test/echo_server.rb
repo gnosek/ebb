@@ -12,5 +12,4 @@ class EchoApp
 end
 
 
-server = Ebb::Server.new(EchoApp.new, :port => 4037)
-server.start
+server = Ebb::start_server(EchoApp.new, :port => 4037)

@@ -4,12 +4,78 @@
 module Ebb
   LIBDIR = File.dirname(__FILE__)
   VERSION = File.read(LIBDIR + "/../VERSION").gsub(/\s/,'')
+  autoload :Runner, LIBDIR + '/ebb/runner'
 end
 
 require Ebb::LIBDIR + '/../src/ebb_ext'
-require Ebb::LIBDIR + '/daemonizable'
 
 module Ebb
+  # "Gasp! No Server class! But this is Object Oriented Programming - we
+  # classes for servers!", you say. Not when there always will be 
+  # exactly one server per virtual machine.
+  def self.start_server(app, options={})
+    port = (options[:port] || 4001).to_i
+    #socket = options[:socket]
+    timeout =  options[:timeout]
+    
+    trap('INT')  { @running = false }
+    
+    FFI::server_listen_on_port(port)
+    
+    puts "Ebb listening at http://0.0.0.0:#{port}/"
+    
+    @running = true
+    while FFI::server_process_connections() and @running
+      unless FFI::waiting_clients.empty?
+        if $DEBUG and  $ebb_waiting_clients.length > 1
+          puts "#{FFI::waiting_clients.length} waiting clients"
+        end
+        client = FFI::waiting_clients.shift
+        process_client(app, client)
+      end
+    end
+    puts "Ebb unlistening"
+    FFI::server_unlisten()
+  end
+  
+  def self.process_client(app, client)
+    #puts "Request: #{client.env.inspect}\n"
+    begin
+      status, headers, body = app.call(client.env)
+    rescue
+      raise if $DEBUG
+      status = 500
+      headers = {'Content-Type' => 'text/plain'}
+      body = "Internal Server Error\n"
+    end
+    
+    client.write_status(status)
+    
+    if body.respond_to? :length and status != 304
+      headers['Connection'] = 'close'
+      headers['Content-Length'] = body.length
+    end
+    
+    headers.each { |k, v| client.write_header(k,v) }
+    
+    client.write "\r\n"
+    
+    # Not many apps use streaming yet so i'll hold off on that feature
+    # until the rest of ebb is more developed.
+    if body.kind_of?(String)
+      client.write body
+    else
+      body.each { |p| client.write p }
+    end
+    client.finished
+  end
+  
+  module FFI
+    def self.waiting_clients
+      @waiting_clients
+    end
+  end
+  
   class Client
     BASE_ENV = {
       'SCRIPT_NAME' => '',
@@ -63,86 +129,6 @@ module Ebb
     
     def each
       raise NotImplementedError
-    end
-  end
-  
-  class Server
-    include Daemonizable
-    def self.run(app, options={})
-      # port must be an integer
-      server = self.new(app, options)
-      yield server if block_given?
-      server.start
-    end
-    
-    def initialize(app, options={})
-      @socket = options[:socket]
-      @port = (options[:port] || 4001).to_i
-      @timeout =  options[:timeout]
-      @app = app
-    end
-    
-    def start
-      trap('INT')  { @running = false }
-      
-      if @socket
-        raise NotImplemented
-        FFI::server_listen_on_socket(self, @socket) or raise "Problem listening on socket #{@socket}"
-      else
-        FFI::server_listen_on_port(self, @port) or raise "Problem listening on port #{@port}"
-      end
-      @waiting_clients = []
-      
-      puts "Ebb listening at http://0.0.0.0:#{@port}/"
-      
-      @running = true
-      while FFI::server_process_connections(self) and @running
-        unless @waiting_clients.empty?
-          if $DEBUG and  @waiting_clients.length > 1
-            puts "#{@waiting_clients.length} waiting clients"
-          end
-          client = @waiting_clients.shift
-          process_client(client)
-        end
-      end
-      puts "Ebb unlistening"
-      FFI::server_unlisten(self)
-    end
-    
-    def process_client(client)
-      #puts "Request: #{client.env.inspect}\n"
-      begin
-        status, headers, body = @app.call(client.env)
-      rescue
-        raise if $DEBUG
-        status = 500
-        headers = {'Content-Type' => 'text/plain'}
-        body = "Internal Server Error\n"
-      end
-      
-      client.write_status(status)
-      
-      if body.respond_to? :length and status != 304
-        headers['Connection'] = 'close'
-        headers['Content-Length'] = body.length
-      end
-      
-      headers.each { |k, v| client.write_header(k,v) }
-      
-      client.write "\r\n"
-      
-      # Not many apps use streaming yet so i'll hold off on that feature
-      # until the rest of ebb is more developed.
-      if body.kind_of?(String)
-        client.write body
-      else
-        body.each { |p| client.write p }
-      end
-      client.finished
-    end
-    
-    def log(msg)
-      puts msg
     end
   end
   
