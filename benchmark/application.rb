@@ -35,7 +35,7 @@ class SimpleApp
       status = 200
     
     elsif commands.include?('wait')
-      n = commands.last.to_i
+      n = commands.last.to_f
       raise "wait called with n <= 0" if n <= 0
       wait(n)
       body = "waited about #{n} seconds"

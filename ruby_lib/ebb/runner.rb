@@ -22,7 +22,8 @@ module Ebb
   class Runner
     DEFAULT_OPTIONS = {
       :port         => 4001,
-      :timeout      => 60
+      :timeout      => 60,
+      :workers      => 1
     }
     
     # Kill the process which PID is stored in +pid_file+.
@@ -106,27 +107,23 @@ module Ebb
       options = DEFAULT_OPTIONS.dup
       option_parser = OptionParser.new do |parser|
         parser.banner = "Usage: #{@name} [options] start | stop"
-        
         parser.separator ""
-        
         if respond_to?(:add_extra_options)
           add_extra_options(parser, options)
         end
-        
         parser.separator ""
-        
         #  opts.on("-s", "--socket SOCKET", "listen on socket")                 { |socket| options[:socket] = socket }
         parser.on("-p", "--port PORT", "(default: #{options[:port]})") { |options[:port]| }
         parser.on("-d", "--daemonize", "Daemonize") { options[:daemonize] = true }
         parser.on("-l", "--log-file FILE", "File to redirect output") { |options[:port]| }
         parser.on("-P", "--pid-file FILE", "File to store PID") { |options[:pid_file]| }
         parser.on("-t", "--timeout SECONDS", "(default: #{options[:timeout]})") { |options[:timeout]| }
-        
+        parser.on("-w", "--workers WORKERS", "Number of worker threads (default: #{options[:workers]})") { |options[:workers]| }
+        parser.separator ""
         parser.on_tail("-h", "--help", "Show this message") do
           puts parser
           exit
         end
-        
         parser.on_tail('-v', '--version', "Show version") do
           puts "Ebb #{Ebb::VERSION}"
           exit

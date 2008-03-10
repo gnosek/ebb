@@ -80,7 +80,7 @@ class ServerTest
   end
   
   def kill
-    Process.kill('KILL', @pid)
+    Process.kill('KILL', @pid) if @pid
   end
   
   def running?

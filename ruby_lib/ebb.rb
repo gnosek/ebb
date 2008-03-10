@@ -9,6 +9,7 @@ module Ebb
   
   def self.start_server(app, options={})
     port = (options[:port] || 4001).to_i
+    nworkers = options[:workers] || 1
     # socket = options[:socket]
     # timeout =  options[:timeout]
     
@@ -18,12 +19,21 @@ module Ebb
     
     trap('INT')  { @running = false }
     @running = true
-    while @running
-      FFI::server_process_connections()
-      if client = FFI::waiting_clients.shift
-        process_client(app, client)
+    
+    workers = ThreadGroup.new
+    nworkers.times do
+      thread = Thread.new do
+        while @running
+          FFI::server_process_connections()
+          if client = FFI::waiting_clients.shift
+            process_client(app, client)
+          end
+        end
       end
+      workers.add(thread)
     end
+    workers.list.each { |thread| thread.join }
+    
     puts "Ebb unlistening"
     FFI::server_unlisten()
   end
