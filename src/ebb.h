@@ -33,8 +33,7 @@ int ebb_client_read(ebb_client *client, char *buffer, int length);
 void ebb_client_write_status(ebb_client*, int status, const char *human_status);
 void ebb_client_write_header(ebb_client*, const char *field, const char *value);
 void ebb_client_write(ebb_client*, const char *data, int length);
-void ebb_client_finished( ebb_client *client);
-
+void ebb_client_begin_transmission( ebb_client *client);
 
 struct ebb_env_item {
   enum { EBB_FIELD_VALUE_PAIR
@@ -75,9 +74,10 @@ struct ebb_client {
   
   ev_timer timeout_watcher;
   
-  int status_sent;
-  int headers_sent;
-  int body_sent;
+  unsigned int status_written : 1;
+  unsigned int headers_written : 1;
+  unsigned int body_written : 1;
+  unsigned int began_transmission : 1;
   
   /* the ENV structure */
   int env_size;

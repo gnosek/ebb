@@ -100,6 +100,8 @@ class ServerTest
       @pid = fork { start_mongrel }
     when 'thin'
       @pid = fork { start_thin }
+    when 'fcgi'
+      @pid = fork { start_fcgi }
     end
   end
   
@@ -128,6 +130,10 @@ class ServerTest
   def start_thin
     require 'thin'
     Rack::Handler::Thin.run(app, :Port => @port)
+  end
+  
+  def start_fcgi
+    Rack::Handler::FastCGI.run(app, :Port => @port)
   end
   
   def trial(ab_cmd)

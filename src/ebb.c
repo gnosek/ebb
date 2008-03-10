@@ -29,10 +29,9 @@
 #define min(a,b) (a < b ? a : b)
 #define ramp(a) (a > 0 ? a : 0)
 
-static int server_socket(const int port);
 static int server_socket_unix(const char *path, int access_mask);
 
-void env_add(ebb_client *client, const char *field, int flen, const char *value, int vlen)
+static void env_add(ebb_client *client, const char *field, int flen, const char *value, int vlen)
 {
   if(client->env_size >= EBB_MAX_ENV) {
     client->parser.overflow_error = TRUE;
@@ -47,7 +46,7 @@ void env_add(ebb_client *client, const char *field, int flen, const char *value,
 }
 
 
-void env_add_const(ebb_client *client, int type, const char *value, int vlen)
+static void env_add_const(ebb_client *client, int type, const char *value, int vlen)
 {
   if(client->env_size >= EBB_MAX_ENV) {
     client->parser.overflow_error = TRUE;
@@ -62,7 +61,7 @@ void env_add_const(ebb_client *client, int type, const char *value, int vlen)
 }
 
 
-void http_field_cb(void *data, const char *field, size_t flen, const char *value, size_t vlen)
+static void http_field_cb(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {
   ebb_client *client = (ebb_client*)(data);
   assert(field != NULL);
@@ -71,49 +70,49 @@ void http_field_cb(void *data, const char *field, size_t flen, const char *value
 }
 
 
-void request_method_cb(void *data, const char *at, size_t length)
+static void request_method_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_REQUEST_METHOD, at, length);
 }
 
 
-void request_uri_cb(void *data, const char *at, size_t length)
+static void request_uri_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_REQUEST_URI, at, length);
 }
 
 
-void fragment_cb(void *data, const char *at, size_t length)
+static void fragment_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_FRAGMENT, at, length);
 }
 
 
-void request_path_cb(void *data, const char *at, size_t length)
+static void request_path_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_REQUEST_PATH, at, length);
 }
 
 
-void query_string_cb(void *data, const char *at, size_t length)
+static void query_string_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_QUERY_STRING, at, length);
 }
 
 
-void http_version_cb(void *data, const char *at, size_t length)
+static void http_version_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_HTTP_VERSION, at, length);
 }
 
 
-void content_length_cb(void *data, const char *at, size_t length)
+static void content_length_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_CONTENT_LENGTH, at, length);
@@ -125,7 +124,7 @@ void content_length_cb(void *data, const char *at, size_t length)
 
 
 const char* localhost_str = "0.0.0.0";
-void dispatch(ebb_client *client)
+static void dispatch(ebb_client *client)
 {
   ebb_server *server = client->server;
   
@@ -147,7 +146,7 @@ void dispatch(ebb_client *client)
 }
 
 
-void on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
+static void on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
 {
   ebb_client *client = (ebb_client*)(watcher->data);
   
@@ -163,7 +162,7 @@ void on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
 #define client_finished_parsing http_parser_is_finished(&client->parser)
 #define total_request_size (client->content_length + client->parser.nread)
 
-void* read_body_into_file(void *_client)
+static void* read_body_into_file(void *_client)
 {
   ebb_client *client = (ebb_client*)_client;
   static unsigned int id;
@@ -233,7 +232,7 @@ error:
 }
 
 
-void on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
+static void on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   ebb_client *client = (ebb_client*)(watcher->data);
   
@@ -285,8 +284,60 @@ error:
   ebb_client_close(client);
 }
 
+static client_init(ebb_server *server, ebb_client *client)
+{
+#ifdef DEBUG
+  /* does ragel fuck up if request buffer isn't null? */
+  for(i=0; i< EBB_BUFFERSIZE; i++)
+    client->request_buffer[i] = 'A';
+#endif
 
-void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
+  client->open = TRUE;
+  client->server = server;
+
+  /* DO SOCKET STUFF */
+  socklen_t len;
+  client->fd = accept(server->fd, (struct sockaddr*)&(server->sockaddr), &len);
+  assert(client->fd >= 0);
+  int flags = fcntl(client->fd, F_GETFL, 0);
+  assert(0 <= fcntl(client->fd, F_SETFL, flags | O_NONBLOCK));
+
+  /* INITIALIZE http_parser */
+  http_parser_init(&(client->parser));
+  client->parser.data = client;
+  client->parser.http_field     = http_field_cb;
+  client->parser.request_method = request_method_cb;
+  client->parser.request_uri    = request_uri_cb;
+  client->parser.fragment       = fragment_cb;
+  client->parser.request_path   = request_path_cb;
+  client->parser.query_string   = query_string_cb;
+  client->parser.http_version   = http_version_cb;
+  client->parser.content_length = content_length_cb;
+
+  /* OTHER */
+
+  client->env_size = 0;
+  client->read = client->nread_from_body = 0;
+  client->response_buffer->len = 0; /* see note in ebb_client_close */
+  client->content_length = 0;
+
+  client->status_written = FALSE;
+  client->headers_written = FALSE;
+  client->body_written = FALSE;
+  client->began_transmission = FALSE;
+
+  /* SETUP READ AND TIMEOUT WATCHERS */
+  client->read_watcher.data = client;
+  ev_init(&client->read_watcher, on_readable);
+  ev_io_set(&client->read_watcher, client->fd, EV_READ | EV_ERROR);
+  ev_io_start(server->loop, &client->read_watcher);
+
+  client->timeout_watcher.data = client;  
+  ev_timer_init(&client->timeout_watcher, on_timeout, EBB_TIMEOUT, EBB_TIMEOUT);
+  ev_timer_start(server->loop, &client->timeout_watcher);
+}
+
+static void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   ebb_server *server = (ebb_server*)(watcher->data);
   assert(server->open);
@@ -321,54 +372,9 @@ void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
   for(i = 0; i < EBB_MAX_CLIENTS; i++)
     if(server->clients[i].open) count += 1;
   g_debug("%d open connections", count);
-  
-  /* does ragel fuck up if request buffer isn't null? */
-  for(i=0; i< EBB_BUFFERSIZE; i++)
-    client->request_buffer[i] = 'A';
 #endif
   
-  client->open = TRUE;
-  client->server = server;
-  
-  /* DO SOCKET STUFF */
-  socklen_t len;
-  client->fd = accept(server->fd, (struct sockaddr*)&(server->sockaddr), &len);
-  assert(client->fd >= 0);
-  int flags = fcntl(client->fd, F_GETFL, 0);
-  assert(0 <= fcntl(client->fd, F_SETFL, flags | O_NONBLOCK));
-  
-  /* INITIALIZE http_parser */
-  http_parser_init(&(client->parser));
-  client->parser.data = client;
-  client->parser.http_field     = http_field_cb;
-  client->parser.request_method = request_method_cb;
-  client->parser.request_uri    = request_uri_cb;
-  client->parser.fragment       = fragment_cb;
-  client->parser.request_path   = request_path_cb;
-  client->parser.query_string   = query_string_cb;
-  client->parser.http_version   = http_version_cb;
-  client->parser.content_length = content_length_cb;
-  
-  /* OTHER */
-
-  client->env_size = 0;
-  client->read = client->nread_from_body = 0;
-  client->response_buffer->len = 0; /* see note in ebb_client_close */
-  client->content_length = 0;
-  
-  client->status_sent = FALSE;
-  client->headers_sent = FALSE;
-  client->body_sent = FALSE;
-  
-  /* SETUP READ AND TIMEOUT WATCHERS */
-  client->read_watcher.data = client;
-  ev_init(&client->read_watcher, on_readable);
-  ev_io_set(&client->read_watcher, client->fd, EV_READ | EV_ERROR);
-  ev_io_start(server->loop, &client->read_watcher);
-  
-  client->timeout_watcher.data = client;  
-  ev_timer_init(&client->timeout_watcher, on_timeout, EBB_TIMEOUT, EBB_TIMEOUT);
-  ev_timer_start(server->loop, &client->timeout_watcher);
+  client_init(server, client);
 }
 
 
@@ -430,7 +436,7 @@ void ebb_server_unlisten(ebb_server *server)
 }
 
 
-void ebb_server_listen(ebb_server *server)
+static void server_listen(ebb_server *server)
 {
   int r = listen(server->fd, EBB_MAX_CLIENTS);
   assert(r >= 0);
@@ -489,7 +495,7 @@ int ebb_server_listen_on_port(ebb_server *server, const int port)
   server->fd = sfd;
   server->port = malloc(sizeof(char)*8); /* for easy access to the port */
   sprintf(server->port, "%d", port);
-  ebb_server_listen(server);
+  server_listen(server);
   return server->fd;
 error:
   if(sfd > 0) close(sfd);
@@ -503,7 +509,7 @@ int ebb_server_listen_on_socket(ebb_server *server, const char *socketpath)
   if(fd < 0) return 0;
   server->socketpath = strdup(socketpath);
   server->fd = fd;
-  ebb_server_listen(server);
+  server_listen(server);
   return fd;
 }
 
@@ -533,13 +539,18 @@ void ebb_client_close(ebb_client *client)
 }
 
 
-void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents)
+static void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   ebb_client *client = (ebb_client*)(watcher->data);
   ssize_t sent;
   
+  assert(client->status_written);
+  assert(client->headers_written);
+  assert(client->began_transmission);
+  
   if(EV_ERROR & revents) {
     g_message("on_client_writable() got error event, closing peer");
+    ebb_client_close(client);
     return;
   }
   
@@ -565,25 +576,28 @@ void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents)
   
   ev_timer_again(loop, &(client->timeout_watcher));
   
-  if(client->written == client->response_buffer->len)
-    ebb_client_close(client);
+  if(client->written == client->response_buffer->len) {
+    ev_io_stop(loop, watcher);
+    if(client->body_written)
+      ebb_client_close(client);
+  }
 }
 
 void ebb_client_write_status(ebb_client *client, int status, const char *human_status)
 {
-  assert(client->status_sent == FALSE);
+  assert(client->status_written == FALSE);
   g_string_append_printf( client->response_buffer
                         , "HTTP/1.1 %d %s\r\n"
                         , status
                         , human_status
                         );
-  client->status_sent = TRUE;
+  client->status_written = TRUE;
 }
 
 void ebb_client_write_header(ebb_client *client, const char *field, const char *value)
 {
-  assert(client->status_sent == TRUE);
-  assert(client->headers_sent == FALSE);
+  assert(client->status_written == TRUE);
+  assert(client->headers_written == FALSE);
   g_string_append_printf( client->response_buffer
                         , "%s: %s\r\n"
                         , field
@@ -594,17 +608,19 @@ void ebb_client_write_header(ebb_client *client, const char *field, const char *
 void ebb_client_write(ebb_client *client, const char *data, int length)
 {
   g_string_append_len(client->response_buffer, data, length);
+  if(client->began_transmission) {
+    /* restart the watcher if we're streaming */
+    ev_io_start(client->server->loop, &client->write_watcher);
+  }
 }
 
 
-void ebb_client_finished(ebb_client *client)
+void ebb_client_begin_transmission(ebb_client *client)
 {
   assert(client->open);
-  assert(FALSE == ev_is_active(&(client->write_watcher)));
+  assert(FALSE == ev_is_active(&client->write_watcher));
   
-  /* assure the socket is still in non-blocking mode
-   * in the ruby binding, for example, i change this flag 
-   */
+  /* assure the socket is still in non-blocking mode */
   int flags = fcntl(client->fd, F_GETFL, 0);
   if(0 > fcntl(client->fd, F_SETFL, flags | O_NONBLOCK)) {
     perror("fcntl()");
@@ -612,11 +628,13 @@ void ebb_client_finished(ebb_client *client)
     return;
   }
   
+  client->headers_written = TRUE;
+  client->began_transmission = TRUE;
   client->written = 0;
   client->write_watcher.data = client;
   ev_init (&(client->write_watcher), on_client_writable);
   ev_io_set (&(client->write_watcher), client->fd, EV_WRITE | EV_ERROR);
-  ev_io_start(client->server->loop, &(client->write_watcher));
+  ev_io_start(client->server->loop, &client->write_watcher);
 }
 
 

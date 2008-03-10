@@ -9,9 +9,13 @@ module Ebb
   
   def self.start_server(app, options={})
     port = (options[:port] || 4001).to_i
+    
     nworkers = options[:workers] || 1
+    Client::BASE_ENV['rack.multithread'] = true if nworkers > 1
+    
     # socket = options[:socket]
     # timeout =  options[:timeout]
+    
     
     FFI::server_listen_on_port(port)
     
@@ -64,10 +68,13 @@ module Ebb
     # until the rest of ebb is more developed.
     if body.kind_of?(String)
       client.write body
+      client.body_written = true
+      client.begin_transmission
     else
-      body.each { |p| client.write p }
+      client.begin_transmission
+      body.each { |p| client.write(p) }
+      client.body_written = true
     end
-    client.finished
   end
   
   def FFI.waiting_clients
@@ -95,8 +102,12 @@ module Ebb
       end
     end
     
-    def finished
-      FFI::client_finished(self)
+    def begin_transmission
+      FFI::client_begin_transmission(self)
+    end
+    
+    def body_written=(v)
+      FFI::client_set_body_written(self, v)
     end
     
     def write(data)
