@@ -92,8 +92,10 @@ class ServerTest
     case name
     when 'emongrel'
       @pid = fork { start_emongrel }
-    when 'ebb'
-      @pid = fork { start_ebb }
+    when /ebb(\d*)/
+      workers = $1.to_i
+      workers = 1 if workers <= 0
+      @pid = fork { start_ebb(workers) }
     when 'mongrel'
       @pid = fork { start_mongrel }
     when 'thin'
@@ -112,9 +114,9 @@ class ServerTest
     Rack::Handler::Mongrel.run(app, :Host => '0.0.0.0', :Port => @port.to_i)
   end
   
-  def start_ebb
+  def start_ebb(workers = 1)
     require File.dirname(__FILE__) + '/../ruby_lib/ebb'
-    server = Ebb::start_server(app, :port => @port)
+    server = Ebb::start_server(app, :port => @port, :workers => workers)
   end
   
   def start_mongrel

@@ -19,7 +19,7 @@ trials = {
     [i, "ab -t 3 -q -c 50 http://0.0.0.0:PORT/bytes/#{bytes}"]
   },
   'wait_fib' => [1,20,40,60,80,100].map { |c|
-    [c, "ab -t 3 -q -c #{c} http://0.0.0.0:PORT/periodical_activity/fibonacci/10"]
+    [c, "ab -t 3 -q -c #{c} http://0.0.0.0:PORT/periodical_activity/fibonacci/15"]
   },
   'wait' => [0.5,1,1.5,2,2.5,3,3.5].map { |t|
     [t, "ab -t 6 -q -c 50 http://0.0.0.0:PORT/periodical_activity/wait/#{t}"]
@@ -31,7 +31,7 @@ trials = {
     [l, "ab -t 6 -q -c 50 -p #{fn} http://0.0.0.0:PORT/test_post_length"]
   },
   'concurrency' => [1,2,5,10,20,30,50,75,100].map { |c|
-    [c, "ab -t 3 -c #{c} http://0.0.0.0:PORT/bytes/1"]
+    [c, "ab -t 3 -q -c #{c} http://0.0.0.0:PORT/bytes/1"]
   }
 }
 
@@ -59,6 +59,7 @@ begin
         result[:input] = x
         results << result
       end
+      sleep 1
     end
     puts "---"
   end

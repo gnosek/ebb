@@ -113,12 +113,12 @@ module Ebb
         end
         parser.separator ""
         #  opts.on("-s", "--socket SOCKET", "listen on socket")                 { |socket| options[:socket] = socket }
-        parser.on("-p", "--port PORT", "(default: #{options[:port]})") { |options[:port]| }
+        parser.on("-p", "--port PORT", "(default: #{options[:port]})") { |p| options[:port]=p }
         parser.on("-d", "--daemonize", "Daemonize") { options[:daemonize] = true }
-        parser.on("-l", "--log-file FILE", "File to redirect output") { |options[:port]| }
-        parser.on("-P", "--pid-file FILE", "File to store PID") { |options[:pid_file]| }
-        parser.on("-t", "--timeout SECONDS", "(default: #{options[:timeout]})") { |options[:timeout]| }
-        parser.on("-w", "--workers WORKERS", "Number of worker threads (default: #{options[:workers]})") { |options[:workers]| }
+        parser.on("-l", "--log-file FILE", "File to redirect output") { |f| options[:log_file]=f }
+        parser.on("-P", "--pid-file FILE", "File to store PID") { |f| options[:pid_file]=f }
+        parser.on("-t", "--timeout SECONDS", "(default: #{options[:timeout]})") { |s| options[:timeout]=s }
+        parser.on("-w", "--workers WORKERS", "Number of worker threads (default: #{options[:workers]})") { |w| options[:workers]=w }
         parser.separator ""
         parser.on_tail("-h", "--help", "Show this message") do
           puts parser

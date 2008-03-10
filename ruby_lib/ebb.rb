@@ -15,7 +15,7 @@ module Ebb
     
     FFI::server_listen_on_port(port)
     
-    puts "Ebb listening at http://0.0.0.0:#{port}/"
+    puts "Ebb listening at http://0.0.0.0:#{port}/ (#{nworkers} worker#{'s' if nworkers > 1})"
     
     trap('INT')  { @running = false }
     @running = true

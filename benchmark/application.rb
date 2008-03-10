@@ -74,10 +74,5 @@ end
 
 if $0 == __FILE__
   require DIR + '/../ruby_lib/ebb'
-  require 'rubygems'
-  require 'ruby-debug'
-  Debugger.start
-  
-  puts "Ebb started on http://0.0.0.0:4001/"
   server = Ebb::start_server(SimpleApp.new, :port => 4001)
 end
