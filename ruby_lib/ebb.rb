@@ -92,7 +92,7 @@ module Ebb
       'rack.multithread'  => false,
       'rack.multiprocess' => false,
       'rack.run_once' => false
-    }.freeze
+    }
     
     def env
       @env ||= begin

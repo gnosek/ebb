@@ -92,7 +92,7 @@ class ServerTest
     case name
     when 'emongrel'
       @pid = fork { start_emongrel }
-    when /ebb(\d*)/
+    when /^ebb(\d*)$/
       workers = $1.to_i
       workers = 1 if workers <= 0
       @pid = fork { start_ebb(workers) }
