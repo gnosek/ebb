@@ -9,72 +9,23 @@ module Ebb
   
   def self.start_server(app, options={})
     port = (options[:port] || 4001).to_i
-    
-    nworkers = options[:workers] || 1
-    Client::BASE_ENV['rack.multithread'] = true if nworkers > 1
-    
-    # socket = options[:socket]
-    # timeout =  options[:timeout]
-    
-    
     FFI::server_listen_on_port(port)
     
-    puts "Ebb listening at http://0.0.0.0:#{port}/ (#{nworkers} worker#{'s' if nworkers > 1})"
+    puts "Ebb listening at http://0.0.0.0:#{port}/"
     
     trap('INT')  { @running = false }
     @running = true
     
-    workers = ThreadGroup.new
-    nworkers.times do
-      thread = Thread.new do
-        while @running
-          FFI::server_process_connections()
-          if client = FFI::waiting_clients.shift
-            process_client(app, client)
-          end
-        end
+    while @running
+      FFI::server_process_connections()
+      while client = FFI::waiting_clients.shift
+        #process_client(app, client)
+        Thread.new(client) { |c| c.process(app) }
       end
-      workers.add(thread)
     end
-    workers.list.each { |thread| thread.join }
     
     puts "Ebb unlistening"
     FFI::server_unlisten()
-  end
-  
-  def self.process_client(app, client)
-    #puts "Request: #{client.env.inspect}\n"
-    begin
-      status, headers, body = app.call(client.env)
-    rescue
-      raise if $DEBUG
-      status = 500
-      headers = {'Content-Type' => 'text/plain'}
-      body = "Internal Server Error\n"
-    end
-    
-    client.write_status(status)
-    
-    if body.respond_to? :length and status != 304
-      headers['Connection'] = 'close'
-      headers['Content-Length'] = body.length
-    end
-    
-    headers.each { |k, v| client.write_header(k,v) }
-    
-    client.write "\r\n"
-    
-    # Not many apps use streaming yet so i'll hold off on that feature
-    # until the rest of ebb is more developed.
-    if body.kind_of?(String)
-      client.write body
-      client.body_written = true
-      client.begin_transmission
-    else
-      client.begin_transmission
-      body.each { |p| client.write(p) }
-      client.body_written = true
-    end
   end
   
   def FFI.waiting_clients
@@ -83,31 +34,59 @@ module Ebb
   
   class Client
     BASE_ENV = {
+      'SERVER_NAME' => '0.0.0.0',
       'SCRIPT_NAME' => '',
       'SERVER_SOFTWARE' => "Ebb #{Ebb::VERSION}",
       'SERVER_PROTOCOL' => 'HTTP/1.1',
       'rack.version' => [0, 1],
       'rack.errors' => STDERR,
       'rack.url_scheme' => 'http',
-      'rack.multithread'  => false,
+      'rack.multithread'  => true,
       'rack.multiprocess' => false,
       'rack.run_once' => false
     }
     
-    def env
-      @env ||= begin
-        env = FFI::client_env(self).update(BASE_ENV)
-        env['rack.input'] = RequestBody.new(self)
-        env
+    def process(app)
+      #puts "Request: #{client.inspect}\n"
+      begin
+        status, headers, body = app.call(env)
+      rescue
+        raise if $DEBUG
+        status = 500
+        headers = {'Content-Type' => 'text/plain'}
+        body = "Internal Server Error\n"
+      end
+      
+      write_status(status)
+      
+      if body.respond_to? :length and status != 304
+        headers['Connection'] = 'close'
+        headers['Content-Length'] = body.length
+      end
+      
+      headers.each { |k, v| write_header(k,v) }
+      
+      write("\r\n")
+      
+      # Not many apps use streaming yet so i'll hold off on that feature
+      # until the rest of ebb is more developed.
+      if body.kind_of?(String)
+        write(body)
+        FFI::client_set_body_written(self, true)
+        FFI::client_begin_transmission(self)
+      else
+        FFI::client_begin_transmission(self)
+        body.each { |p| write(p) }
+        FFI::client_set_body_written(self, true)
       end
     end
     
-    def begin_transmission
-      FFI::client_begin_transmission(self)
-    end
+    private
     
-    def body_written=(v)
-      FFI::client_set_body_written(self, v)
+    def env
+      env = FFI::client_env(self).update(BASE_ENV)
+      env['rack.input'] = RequestBody.new(self)
+      env
     end
     
     def write(data)

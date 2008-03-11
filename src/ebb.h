@@ -4,16 +4,12 @@
  */
 #ifndef ebb_h
 #define ebb_h
-
+#define EV_STANDALONE 1
+#include <ev.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <glib.h>
-
-#define EV_STANDALONE 1
-#include <ev.h>
-
 #include "parser.h"
-
 
 typedef struct ebb_server ebb_server;
 typedef struct ebb_client ebb_client;
@@ -43,7 +39,6 @@ struct ebb_env_item {
        , EBB_REQUEST_PATH
        , EBB_QUERY_STRING
        , EBB_HTTP_VERSION
-       , EBB_SERVER_NAME
        , EBB_SERVER_PORT
        , EBB_CONTENT_LENGTH
        } type;

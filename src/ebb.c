@@ -31,7 +31,7 @@
 
 static int server_socket_unix(const char *path, int access_mask);
 
-static void env_add(ebb_client *client, const char *field, int flen, const char *value, int vlen)
+void env_add(ebb_client *client, const char *field, int flen, const char *value, int vlen)
 {
   if(client->env_size >= EBB_MAX_ENV) {
     client->parser.overflow_error = TRUE;
@@ -46,7 +46,7 @@ static void env_add(ebb_client *client, const char *field, int flen, const char 
 }
 
 
-static void env_add_const(ebb_client *client, int type, const char *value, int vlen)
+void env_add_const(ebb_client *client, int type, const char *value, int vlen)
 {
   if(client->env_size >= EBB_MAX_ENV) {
     client->parser.overflow_error = TRUE;
@@ -61,7 +61,7 @@ static void env_add_const(ebb_client *client, int type, const char *value, int v
 }
 
 
-static void http_field_cb(void *data, const char *field, size_t flen, const char *value, size_t vlen)
+void http_field_cb(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {
   ebb_client *client = (ebb_client*)(data);
   assert(field != NULL);
@@ -70,60 +70,60 @@ static void http_field_cb(void *data, const char *field, size_t flen, const char
 }
 
 
-static void request_method_cb(void *data, const char *at, size_t length)
+void request_method_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_REQUEST_METHOD, at, length);
 }
 
 
-static void request_uri_cb(void *data, const char *at, size_t length)
+void request_uri_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_REQUEST_URI, at, length);
 }
 
 
-static void fragment_cb(void *data, const char *at, size_t length)
+void fragment_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_FRAGMENT, at, length);
 }
 
 
-static void request_path_cb(void *data, const char *at, size_t length)
+void request_path_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_REQUEST_PATH, at, length);
 }
 
 
-static void query_string_cb(void *data, const char *at, size_t length)
+void query_string_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_QUERY_STRING, at, length);
 }
 
 
-static void http_version_cb(void *data, const char *at, size_t length)
+void http_version_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_HTTP_VERSION, at, length);
 }
 
 
-static void content_length_cb(void *data, const char *at, size_t length)
+void content_length_cb(void *data, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
   env_add_const(client, EBB_CONTENT_LENGTH, at, length);
   /* atoi_length - why isn't this in the statndard library? i hate c */
+  assert(client->content_length == 0);
   int i, mult;
   for(mult=1, i=length-1; i>=0; i--, mult*=10)
     client->content_length += (at[i] - '0') * mult;
 }
 
 
-const char* localhost_str = "0.0.0.0";
 static void dispatch(ebb_client *client)
 {
   ebb_server *server = client->server;
@@ -133,10 +133,6 @@ static void dispatch(ebb_client *client)
   
   /* Set the env variables */
   if(server->port) {
-    env_add_const(client, EBB_SERVER_NAME
-                        , localhost_str
-                        , 7
-                        );
     env_add_const(client, EBB_SERVER_PORT
                         , server->port
                         , strlen(server->port)
@@ -291,17 +287,17 @@ static client_init(ebb_server *server, ebb_client *client)
   for(i=0; i< EBB_BUFFERSIZE; i++)
     client->request_buffer[i] = 'A';
 #endif
-
+  
   client->open = TRUE;
   client->server = server;
-
+  
   /* DO SOCKET STUFF */
   socklen_t len;
   client->fd = accept(server->fd, (struct sockaddr*)&(server->sockaddr), &len);
   assert(client->fd >= 0);
   int flags = fcntl(client->fd, F_GETFL, 0);
   assert(0 <= fcntl(client->fd, F_SETFL, flags | O_NONBLOCK));
-
+  
   /* INITIALIZE http_parser */
   http_parser_init(&(client->parser));
   client->parser.data = client;
@@ -313,25 +309,24 @@ static client_init(ebb_server *server, ebb_client *client)
   client->parser.query_string   = query_string_cb;
   client->parser.http_version   = http_version_cb;
   client->parser.content_length = content_length_cb;
-
+  
   /* OTHER */
-
   client->env_size = 0;
   client->read = client->nread_from_body = 0;
   client->response_buffer->len = 0; /* see note in ebb_client_close */
   client->content_length = 0;
-
+  
   client->status_written = FALSE;
   client->headers_written = FALSE;
   client->body_written = FALSE;
   client->began_transmission = FALSE;
-
+  
   /* SETUP READ AND TIMEOUT WATCHERS */
   client->read_watcher.data = client;
   ev_init(&client->read_watcher, on_readable);
   ev_io_set(&client->read_watcher, client->fd, EV_READ | EV_ERROR);
   ev_io_start(server->loop, &client->read_watcher);
-
+  
   client->timeout_watcher.data = client;  
   ev_timer_init(&client->timeout_watcher, on_timeout, EBB_TIMEOUT, EBB_TIMEOUT);
   ev_timer_start(server->loop, &client->timeout_watcher);

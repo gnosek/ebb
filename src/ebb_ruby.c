@@ -17,7 +17,6 @@ static VALUE global_request_path;
 static VALUE global_query_string;
 static VALUE global_http_version;
 static VALUE global_request_body;
-static VALUE global_server_name;
 static VALUE global_server_port;
 static VALUE global_path_info;
 static VALUE global_content_length;
@@ -103,7 +102,6 @@ VALUE env_field(struct ebb_env_item *item)
     case EBB_REQUEST_PATH:    return global_request_path;
     case EBB_QUERY_STRING:    return global_query_string;
     case EBB_HTTP_VERSION:    return global_http_version;
-    case EBB_SERVER_NAME:     return global_server_name;
     case EBB_SERVER_PORT:     return global_server_port;
     case EBB_CONTENT_LENGTH:  return global_content_length;
   }
@@ -219,7 +217,6 @@ void Init_ebb_ext()
   DEF_GLOBAL(query_string, "QUERY_STRING");
   DEF_GLOBAL(http_version, "HTTP_VERSION");
   DEF_GLOBAL(request_body, "REQUEST_BODY");
-  DEF_GLOBAL(server_name, "SERVER_NAME");
   DEF_GLOBAL(server_port, "SERVER_PORT");
   DEF_GLOBAL(path_info, "PATH_INFO");
   DEF_GLOBAL(content_length, "CONTENT_LENGTH");

@@ -118,7 +118,7 @@ module Ebb
         parser.on("-l", "--log-file FILE", "File to redirect output") { |f| options[:log_file]=f }
         parser.on("-P", "--pid-file FILE", "File to store PID") { |f| options[:pid_file]=f }
         parser.on("-t", "--timeout SECONDS", "(default: #{options[:timeout]})") { |s| options[:timeout]=s }
-        parser.on("-w", "--workers WORKERS", "Number of worker threads (default: #{options[:workers]})") { |w| options[:workers]=w }
+        #parser.on("-w", "--workers WORKERS", "Number of worker threads (default: #{options[:workers]})") { |w| options[:workers]=w }
         parser.separator ""
         parser.on_tail("-h", "--help", "Show this message") do
           puts parser

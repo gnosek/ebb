@@ -148,7 +148,12 @@ class ServerTest
     if r =~ /Complete requests:\s*(\d+)/
       requests_completed = $1.to_i
     end
-    puts "   #{rps} req/sec (#{requests_completed} completed)"
+    if r =~ /Failed requests:\s*(\d+)/     
+      failed_requests =  $1.to_i
+    else
+      raise "didn't get how many failed requests from ab"
+    end
+    puts "   #{rps} req/sec (#{requests_completed} completed, #{failed_requests} failed)"
     
     {
       :server => @name,
