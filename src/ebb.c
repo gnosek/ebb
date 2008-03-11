@@ -138,6 +138,7 @@ static void dispatch(ebb_client *client)
                         , strlen(server->port)
                         );
   }
+  client->in_use = TRUE;
   server->request_cb(client, server->request_cb_data);
 }
 
@@ -232,6 +233,7 @@ static void on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   ebb_client *client = (ebb_client*)(watcher->data);
   
+  assert(client->in_use == FALSE);
   assert(client->open);
   assert(client->server->open);
   assert(client->server->loop == loop);
@@ -282,6 +284,7 @@ error:
 
 static client_init(ebb_server *server, ebb_client *client)
 {
+  assert(client->in_use == FALSE);
 #ifdef DEBUG
   /* does ragel fuck up if request buffer isn't null? */
   for(i=0; i< EBB_BUFFERSIZE; i++)
@@ -353,7 +356,7 @@ static void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
   ebb_client *client;
   /* Get next availible peer */
   for(i=0; i < EBB_MAX_CLIENTS; i++)
-    if(!server->clients[i].open) {
+    if(!server->clients[i].in_use && !server->clients[i].open) {
       client = &(server->clients[i]);
       break;
     }
@@ -387,8 +390,11 @@ void ebb_server_init( ebb_server *server
                     )
 {
   int i;
-  for(i=0; i < EBB_MAX_CLIENTS; i++)
+  for(i=0; i < EBB_MAX_CLIENTS; i++) {
     server->clients[i].response_buffer = g_string_new("");
+    server->clients[i].open = FALSE;
+    server->clients[i].in_use = FALSE;
+  }
   
   server->request_cb = request_cb;
   server->request_cb_data = request_cb_data;
@@ -509,6 +515,13 @@ int ebb_server_listen_on_socket(ebb_server *server, const char *socketpath)
 }
 
 
+void ebb_client_release(ebb_client *client)
+{
+  assert(client->in_use);
+  client->in_use = FALSE;
+}
+
+
 void ebb_client_close(ebb_client *client)
 {
   if(client->open) {
@@ -580,8 +593,8 @@ static void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents
 
 void ebb_client_write_status(ebb_client *client, int status, const char *human_status)
 {
-  if(!client->open)
-    return;
+  assert(client->in_use);
+  if(!client->open) return;
   assert(client->status_written == FALSE);
   g_string_append_printf( client->response_buffer
                         , "HTTP/1.1 %d %s\r\n"
@@ -593,8 +606,8 @@ void ebb_client_write_status(ebb_client *client, int status, const char *human_s
 
 void ebb_client_write_header(ebb_client *client, const char *field, const char *value)
 {
-  if(!client->open)
-    return;
+  assert(client->in_use);
+  if(!client->open) return;
   assert(client->status_written == TRUE);
   assert(client->headers_written == FALSE);
   g_string_append_printf( client->response_buffer
@@ -606,8 +619,8 @@ void ebb_client_write_header(ebb_client *client, const char *field, const char *
 
 void ebb_client_write(ebb_client *client, const char *data, int length)
 {
-  if(!client->open)
-    return;
+  assert(client->in_use);
+  if(!client->open) return;
   g_string_append_len(client->response_buffer, data, length);
   if(client->began_transmission) {
     /* restart the watcher if we're streaming */
@@ -618,8 +631,8 @@ void ebb_client_write(ebb_client *client, const char *data, int length)
 
 void ebb_client_begin_transmission(ebb_client *client)
 {
-  if(!client->open)
-    return;
+  assert(client->in_use);
+  if(!client->open) return;
   assert(FALSE == ev_is_active(&client->write_watcher));
   
   /* assure the socket is still in non-blocking mode */
@@ -648,9 +661,8 @@ int ebb_client_read(ebb_client *client, char *buffer, int length)
 {
   size_t read;
   
-  if(!client->open) {
-    return -1;
-  }
+  assert(client->in_use);
+  if(!client->open) return -1;
   assert(client_finished_parsing);
   
   if(client->upload_file) {

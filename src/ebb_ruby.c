@@ -194,6 +194,15 @@ VALUE client_begin_transmission(VALUE _, VALUE rb_client)
   return Qnil;
 }
 
+VALUE client_release(VALUE _, VALUE rb_client)
+{
+  ebb_client *client;
+  Data_Get_Struct(rb_client, ebb_client, client);
+  ebb_client_release(client);
+  return Qnil;
+}
+
+
 VALUE client_set_body_written(VALUE _, VALUE rb_client, VALUE v)
 {
   ebb_client *client;
@@ -234,6 +243,7 @@ void Init_ebb_ext()
   rb_define_singleton_method(mFFI, "client_begin_transmission", client_begin_transmission, 1);
   rb_define_singleton_method(mFFI, "client_set_body_written", client_set_body_written, 2);
   rb_define_singleton_method(mFFI, "client_env", client_env, 1);
+  rb_define_singleton_method(mFFI, "client_release", client_release, 1);
   
   /* initialize ebb_server */
   loop = ev_default_loop (0);

@@ -57,7 +57,7 @@ module Ebb
         body = "Internal Server Error\n"
       end
       
-      write_status(status)
+      FFI::client_write_status(self, status.to_i, HTTP_STATUS_CODES[status.to_i])
       
       if body.respond_to? :length and status != 304
         headers['Connection'] = 'close'
@@ -79,6 +79,8 @@ module Ebb
         body.each { |p| write(p) }
         FFI::client_set_body_written(self, true)
       end
+    ensure
+      FFI::client_release(self)
     end
     
     private
@@ -91,10 +93,6 @@ module Ebb
     
     def write(data)
       FFI::client_write(self, data)
-    end
-    
-    def write_status(status)
-      FFI::client_write_status(self, status.to_i, HTTP_STATUS_CODES[status])
     end
     
     def write_header(field, value)
