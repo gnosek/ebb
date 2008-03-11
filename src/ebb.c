@@ -229,7 +229,7 @@ error:
 }
 
 
-static void on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
+static void on_client_readable(struct ev_loop *loop, ev_io *watcher, int revents)
 {
   ebb_client *client = (ebb_client*)(watcher->data);
   
@@ -244,8 +244,8 @@ static void on_readable(struct ev_loop *loop, ev_io *watcher, int revents)
                      , EBB_BUFFERSIZE - client->read
                      , 0
                      );
-  if(read < 0) goto error; /* XXX is this the right action to take for read==0 ? */
-  if(read == 0) return;
+  if(read < 0) goto error; 
+  if(read == 0) goto error; /* XXX is this the right action to take for read==0 ? */
   client->read += read;
   ev_timer_again(loop, &client->timeout_watcher);
   
@@ -326,7 +326,7 @@ static client_init(ebb_server *server, ebb_client *client)
   
   /* SETUP READ AND TIMEOUT WATCHERS */
   client->read_watcher.data = client;
-  ev_init(&client->read_watcher, on_readable);
+  ev_init(&client->read_watcher, on_client_readable);
   ev_io_set(&client->read_watcher, client->fd, EV_READ | EV_ERROR);
   ev_io_start(server->loop, &client->read_watcher);
   
@@ -436,21 +436,6 @@ void ebb_server_unlisten(ebb_server *server)
   }
 }
 
-
-static void server_listen(ebb_server *server)
-{
-  int r = listen(server->fd, EBB_MAX_CLIENTS);
-  assert(r >= 0);
-  assert(server->open == FALSE);
-  server->open = TRUE;
-  
-  server->request_watcher.data = server;
-  ev_init (&server->request_watcher, on_request);
-  ev_io_set (&server->request_watcher, server->fd, EV_READ | EV_ERROR);
-  ev_io_start (server->loop, &server->request_watcher);
-}
-
-
 int ebb_server_listen_on_port(ebb_server *server, const int port)
 {
   int sfd = -1;
@@ -496,7 +481,14 @@ int ebb_server_listen_on_port(ebb_server *server, const int port)
   server->fd = sfd;
   server->port = malloc(sizeof(char)*8); /* for easy access to the port */
   sprintf(server->port, "%d", port);
-  server_listen(server);
+  assert(server->open == FALSE);
+  server->open = TRUE;
+  
+  server->request_watcher.data = server;
+  ev_init (&server->request_watcher, on_request);
+  ev_io_set (&server->request_watcher, server->fd, EV_READ | EV_ERROR);
+  ev_io_start (server->loop, &server->request_watcher);
+  
   return server->fd;
 error:
   if(sfd > 0) close(sfd);
@@ -506,12 +498,12 @@ error:
 
 int ebb_server_listen_on_socket(ebb_server *server, const char *socketpath)
 {
-  int fd = server_socket_unix(socketpath, 0755);
-  if(fd < 0) return 0;
-  server->socketpath = strdup(socketpath);
-  server->fd = fd;
-  server_listen(server);
-  return fd;
+  // int fd = server_socket_unix(socketpath, 0755);
+  // if(fd < 0) return 0;
+  // server->socketpath = strdup(socketpath);
+  // server->fd = fd;
+  // server_listen(server);
+  // return fd;
 }
 
 
@@ -576,6 +568,9 @@ static void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents
 #endif
     ebb_client_close(client);
     return;
+  } else if(sent == 0) {
+    g_message("Sent zero bytes? Closing connection");
+    ebb_client_close(client);
   }
   client->written += sent;
   
