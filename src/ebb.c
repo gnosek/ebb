@@ -580,6 +580,8 @@ static void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents
 
 void ebb_client_write_status(ebb_client *client, int status, const char *human_status)
 {
+  if(!client->open)
+    return;
   assert(client->status_written == FALSE);
   g_string_append_printf( client->response_buffer
                         , "HTTP/1.1 %d %s\r\n"
@@ -591,6 +593,8 @@ void ebb_client_write_status(ebb_client *client, int status, const char *human_s
 
 void ebb_client_write_header(ebb_client *client, const char *field, const char *value)
 {
+  if(!client->open)
+    return;
   assert(client->status_written == TRUE);
   assert(client->headers_written == FALSE);
   g_string_append_printf( client->response_buffer
@@ -602,6 +606,8 @@ void ebb_client_write_header(ebb_client *client, const char *field, const char *
 
 void ebb_client_write(ebb_client *client, const char *data, int length)
 {
+  if(!client->open)
+    return;
   g_string_append_len(client->response_buffer, data, length);
   if(client->began_transmission) {
     /* restart the watcher if we're streaming */
@@ -612,7 +618,8 @@ void ebb_client_write(ebb_client *client, const char *data, int length)
 
 void ebb_client_begin_transmission(ebb_client *client)
 {
-  assert(client->open);
+  if(!client->open)
+    return;
   assert(FALSE == ev_is_active(&client->write_watcher));
   
   /* assure the socket is still in non-blocking mode */
@@ -641,7 +648,9 @@ int ebb_client_read(ebb_client *client, char *buffer, int length)
 {
   size_t read;
   
-  assert(client->open);
+  if(!client->open) {
+    return -1;
+  }
   assert(client_finished_parsing);
   
   if(client->upload_file) {
