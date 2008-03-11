@@ -9,18 +9,28 @@ module Ebb
   
   def self.start_server(app, options={})
     port = (options[:port] || 4001).to_i
+    if options.has_key?(:threaded_processing)
+      threaded_processing = options[:threaded_processing] ? true : false
+    else
+      threaded_processing = true
+    end
+    
+    Client::BASE_ENV['rack.multithread'] = threaded_processing
+    
     FFI::server_listen_on_port(port)
     
-    puts "Ebb listening at http://0.0.0.0:#{port}/"
-    
+    puts "Ebb listening at http://0.0.0.0:#{port}/ (#{threaded_processing ? 'threaded' : 'sequential'} processing)"
     trap('INT')  { @running = false }
     @running = true
     
     while @running
       FFI::server_process_connections()
       while client = FFI::waiting_clients.shift
-        #process_client(app, client)
-        Thread.new(client) { |c| c.process(app) }
+        if threaded_processing
+          Thread.new(client) { |c| c.process(app) }
+        else
+          client.process(app)
+        end
       end
     end
     

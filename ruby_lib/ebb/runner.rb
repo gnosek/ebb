@@ -23,7 +23,8 @@ module Ebb
     DEFAULT_OPTIONS = {
       :port         => 4001,
       :timeout      => 60,
-      :workers      => 1
+      :workers      => 1,
+      :threaded_processing => true
     }
     
     # Kill the process which PID is stored in +pid_file+.
@@ -119,6 +120,12 @@ module Ebb
         parser.on("-P", "--pid-file FILE", "File to store PID") { |f| options[:pid_file]=f }
         parser.on("-t", "--timeout SECONDS", "(default: #{options[:timeout]})") { |s| options[:timeout]=s }
         #parser.on("-w", "--workers WORKERS", "Number of worker threads (default: #{options[:workers]})") { |w| options[:workers]=w }
+        parser.on("-w", "-- WORKERS", "Number of worker threads (default: #{options[:workers]})") { |w| options[:workers]=w }
+        
+        parser.on("-S", "--sequential", "do not use threaded processing") do
+          options[:threaded_processing] = false
+        end
+        
         parser.separator ""
         parser.on_tail("-h", "--help", "Show this message") do
           puts parser

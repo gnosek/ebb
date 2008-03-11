@@ -58,13 +58,16 @@ VALUE server_process_connections(VALUE _)
 {
   ev_timer timeout;
   ev_timer_init (&timeout, oneshot_timeout, 0.01, 0.);
-  ev_timer_start (loop, &timeout);
-   
+  ev_timer_start (loop, &timeout); 
   ev_loop(loop, EVLOOP_ONESHOT);
-  /* XXX: Need way to know when the loop is finished...
-   * should return true or false */
-   
   ev_timer_stop(loop, &timeout);
+  
+  /* Call rb_thread_schedule() proportional to the number of rb threads running */
+  /* SO HACKY! Anyone have a better way to do this? */
+  int i;
+  for(i = 0; i < EBB_MAX_CLIENTS; i++)
+    if(server->clients[i].in_use)
+      rb_thread_schedule();
   
   if(server->open)
     return Qtrue;
