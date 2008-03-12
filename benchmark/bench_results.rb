@@ -4,29 +4,40 @@ require 'google_chart'
 require 'server_test'
 
 class Array
-  def avg
-    sum.to_f / length
+  def max
+    inject(first) { |m, i| i > m ? i : m } 
   end
-  def sum
-    inject(0) { |i, s| s += i }
+  
+  def min
+    inject(first) { |m, i| i < m ? i : m }
   end
 end
 
 
 
-colors = %w{F74343 444130 7DA478 E4AC3D}
-max_x = 0
-max_y = 0
+colors = %w{F74343 444130 7DA478 E4AC3D 1F479E}
+data_x = []
+data_y = []
 results = ServerTestResults.open(ARGV[0])
-all_m = []
-response_chart = GoogleChart::LineChart.new('400x300', Time.now.strftime('%Y.%m.%d'), true)
-results.servers.each do |server|
+
+response_chart = GoogleChart::LineChart.new('500x300', Time.now.strftime('%Y.%m.%d'), true)
+servers = results.servers.sort_by do |x,y|
+  results.data(x).map { |d| d[1] }.mean
+end.reverse
+
+cmap = {}
+results.servers.sort.each { |x| cmap[x] = colors.shift }
+
+servers.each do |server|
   data = results.data(server).sort
-  response_chart.data(server, data, colors.shift)
-  x = data.map { |d| d[0] }.max
-  y = data.map { |d| d[1] }.max
-  max_x = x if x > max_x
-  max_y = y if y > max_y
+  data_x += data.map { |d| d[0] }
+  data_y += data.map { |d| d[1] }
+end
+
+servers.each do |server|
+  data = results.data(server).sort
+  data.map! { |d| [d[0]-data_x.min, d[1]-data_y.min]}
+  response_chart.data(server, data, cmap[server])
 end
 
 label = case results.benchmark
@@ -36,10 +47,12 @@ when "wait_fib", "concurrency"
   "concurrency"
 when "post_size"
   "kilobytes uploaded"
+when "wait", "wait_fib"
+  "seconds waited every 10 requests"
 end
 
-response_chart.axis(:y, :range => [0,max_y])
+response_chart.axis(:y, :range => [data_y.min,data_y.max])
 response_chart.axis(:y, :labels => ['req/s'], :positions => [50])
-response_chart.axis(:x, :range => [0,max_x])
+response_chart.axis(:x, :range => [data_x.min,data_x.max])
 response_chart.axis(:x, :labels => [label], :positions => [50])
 puts response_chart.to_url

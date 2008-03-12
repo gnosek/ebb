@@ -6,12 +6,35 @@ require 'application'
 
 
 class Array
-  def avg
-    sum.to_f / length
+  def mean
+    @mean ||= sum / length
+  end
+  
+  def variance
+    @variance ||= map { |x| (mean - x)**2 }.sum / length
+  end
+  
+  def stdd
+    @stdd ||= Math.sqrt(variance)
+  end
+  
+  def errors
+    map { |x| (mean - x).abs }
+  end
+  
+  def center_avg
+    return mean if stdd < 10
+    acceptable_error = 0
+    good_points = []
+    while good_points.empty?
+      acceptable_error += stdd
+      good_points = select { |x| (mean - x).abs < acceptable_error }
+    end
+    good_points.mean
   end
   
   def sum
-    inject(0) { |i, s| s += i }
+    inject(0.to_f) { |i, s| s += i }
   end
   
   def rand_each(&block)
@@ -27,7 +50,7 @@ class ServerTestResults
       new
     end
   end
-
+  attr_reader :results
   def initialize(results = [])
     @results = results
   end
@@ -61,7 +84,7 @@ class ServerTestResults
     datas = []
     ticks.each do |c|
       measurements = server_data.find_all { |d| d[:input] == c }.map { |d| d[:rps] }
-      datas << [c, measurements.avg]
+      datas << [c, measurements.mean] unless measurements.empty?
     end
     datas
   end
@@ -164,6 +187,7 @@ class ServerTest
       :server => @name,
       :rps => rps,
       :requests_completed => requests_completed,
+      :requests_failed => failed_requests,
       :ab_cmd => cmd
     }
   end

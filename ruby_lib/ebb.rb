@@ -51,7 +51,6 @@ module Ebb
       'rack.version' => [0, 1],
       'rack.errors' => STDERR,
       'rack.url_scheme' => 'http',
-      'rack.multithread'  => true,
       'rack.multiprocess' => false,
       'rack.run_once' => false
     }
