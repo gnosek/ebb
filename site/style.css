@@ -19,6 +19,8 @@ h1, h2, h3, h4 {
   margin: 1em 0;
 }
 
+pre { overflow: auto; }
+
 a { color: #E4AC3D; }
 #license { 
   font-size: 8pt; 
