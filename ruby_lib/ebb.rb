@@ -38,6 +38,7 @@ module Ebb
     FFI::server_unlisten()
   end
   
+  # This array is created and manipulated in the C extension.
   def FFI.waiting_clients
     @waiting_clients
   end
@@ -56,7 +57,6 @@ module Ebb
     }
     
     def process(app)
-      #puts "Request: #{client.inspect}\n"
       begin
         status, headers, body = app.call(env)
       rescue
@@ -66,28 +66,28 @@ module Ebb
         body = "Internal Server Error\n"
       end
       
-      FFI::client_write_status(self, status.to_i, HTTP_STATUS_CODES[status.to_i])
+      status = status.to_i
+      FFI::client_write_status(self, status, HTTP_STATUS_CODES[status])
       
-      if body.respond_to? :length and status != 304
+      if headers.respond_to?(:[]=) and body.respond_to?(:length) and status != 304
         headers['Connection'] = 'close'
-        headers['Content-Length'] = body.length
+        headers['Content-Length'] = body.length.to_s
       end
       
-      headers.each { |k, v| write_header(k,v) }
-      
+      headers.each { |field, value| write_header(field, value) }
       write("\r\n")
       
-      # Not many apps use streaming yet so i'll hold off on that feature
-      # until the rest of ebb is more developed.
       if body.kind_of?(String)
         write(body)
-        FFI::client_set_body_written(self, true)
-        FFI::client_begin_transmission(self)
+        body_written()
+        begin_transmission()
       else
-        FFI::client_begin_transmission(self)
+        begin_transmission()
         body.each { |p| write(p) }
-        FFI::client_set_body_written(self, true)
+        body_written()
       end
+    rescue => e
+      puts "Error! #{e.class}  #{e.message}"
     ensure
       FFI::client_release(self)
     end
@@ -105,7 +105,17 @@ module Ebb
     end
     
     def write_header(field, value)
-      FFI::client_write_header(self, field.to_s, value.to_s)
+      value.send(value.is_a?(String) ? :each_line : :each) do |v| 
+        FFI::client_write_header(self, field, v.chomp)
+      end
+    end
+    
+    def body_written
+      FFI::client_set_body_written(self, true)
+    end
+    
+    def begin_transmission
+      FFI::client_begin_transmission(self)
     end
   end
   
