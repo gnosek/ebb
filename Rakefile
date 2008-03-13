@@ -81,7 +81,7 @@ spec = Gem::Specification.new do |s|
   s.author = 'ry dahl'
   s.email = 'ry at tiny clouds dot org'
   s.homepage = 'http://ebb.rubyforge.org'
-  s.version = File.read(dir("VERSION")).gsub(/\s/,'')
+  s.version = `grep EBB_VERSION #{dir('src/ebb.h')}`.match(/\d.\d.\d/)[0]
   s.rubyforge_project = 'ebb'
   
   s.add_dependency('rack')
@@ -101,10 +101,5 @@ end
 
 ## Compile 
 file('src/parser.c' => 'src/parser.rl') do
-  #sh "ragel src/parser.rl | rlgen-cd -G2 -o src/parser.c"  # ragel 5
-  sh 'ragel -G2 src/parser.rl' # ragel 6
-end
-
-file('test/parser_test' => ['src/parser.c', 'src/parser.h']) do
-  sh "gcc -g -Wall -I#{dir('src')} -DPARSER_TEST #{dir('src/parser.c')} -o #{dir('test/parser_test')}"
+  sh 'ragel -s -G2 src/parser.rl'
 end

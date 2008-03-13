@@ -73,6 +73,9 @@ end
 
 
 if $0 == __FILE__
+  require 'rubygems'
+  require 'ruby-debug'
+  Debugger.start
   require DIR + '/../ruby_lib/ebb'
   server = Ebb::start_server(SimpleApp.new, :port => 4001)
 end

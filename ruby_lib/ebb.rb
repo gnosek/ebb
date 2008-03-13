@@ -3,7 +3,6 @@
 # See README file for details.
 module Ebb
   LIBDIR = File.dirname(__FILE__)
-  VERSION = File.read(LIBDIR + "/../VERSION").gsub(/\s/,'')
   require Ebb::LIBDIR + '/../src/ebb_ext'
   autoload :Runner, LIBDIR + '/ebb/runner'
   

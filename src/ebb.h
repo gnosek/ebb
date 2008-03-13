@@ -13,7 +13,7 @@
 
 typedef struct ebb_server ebb_server;
 typedef struct ebb_client ebb_client;
-
+#define EBB_VERSION "0.1.0"
 #define EBB_BUFFERSIZE (1024 * (80 + 33))
 #define EBB_MAX_CLIENTS 200
 #define EBB_TIMEOUT 30.0

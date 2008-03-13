@@ -122,18 +122,20 @@ VALUE env_value(struct ebb_env_item *item)
 }
 
 
-VALUE client_env(VALUE _, VALUE client)
+VALUE client_env(VALUE _, VALUE rb_client)
 {
-  ebb_client *_client;
-  VALUE hash = rb_hash_new();
-  int i;  
-  Data_Get_Struct(client, ebb_client, _client);
+  ebb_client *client;
+  VALUE field, value, hash = rb_hash_new();
+  int i;
   
-  for(i=0; i < _client->env_size; i++) {
-    rb_hash_aset(hash, env_field(&_client->env[i])
-                     , env_value(&_client->env[i])
-                     );
+  Data_Get_Struct(rb_client, ebb_client, client);
+  for(i=0; i < client->env_size; i++) {
+    field = env_field(&client->env[i]);
+    value = env_value(&client->env[i]);
+    rb_hash_aset(hash, field, value);
+    //printf("(%s, %s)\n", StringValuePtr(field), StringValuePtr(value));
   }
+  //printf("\n\n");
   rb_hash_aset(hash, global_path_info, rb_hash_aref(hash, global_request_path));
   return hash;
 }
@@ -219,6 +221,8 @@ void Init_ebb_ext()
   VALUE mEbb = rb_define_module("Ebb");
   VALUE mFFI = rb_define_module_under(mEbb, "FFI");
   
+  rb_define_const(mEbb, "VERSION", rb_str_new2(EBB_VERSION));
+  
   /** Defines global strings in the init method. */
 #define DEF_GLOBAL(N, val) global_##N = rb_obj_freeze(rb_str_new2(val)); rb_global_variable(&global_##N)
   DEF_GLOBAL(http_prefix, "HTTP_");
@@ -231,7 +235,7 @@ void Init_ebb_ext()
   DEF_GLOBAL(request_body, "REQUEST_BODY");
   DEF_GLOBAL(server_port, "SERVER_PORT");
   DEF_GLOBAL(path_info, "PATH_INFO");
-  DEF_GLOBAL(content_length, "CONTENT_LENGTH");
+  DEF_GLOBAL(content_length, "HTTP_CONTENT_LENGTH");
   DEF_GLOBAL(http_host, "HTTP_HOST");
   
   rb_define_singleton_method(mFFI, "server_process_connections", server_process_connections, 0);
