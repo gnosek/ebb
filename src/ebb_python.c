@@ -44,6 +44,13 @@ typedef struct {
 static PyObject *
 py_start_response(py_client *self, PyObject *args, PyObject *kw);
 
+static void py_client_dealloc(PyObject *obj)
+{
+  py_client *self = (py_client*) obj;
+  ebb_client_release(self->client);
+  obj->ob_type->tp_free(obj);
+  printf("dealloc called!\n");
+}
 
 static PyMethodDef client_methods[] = 
   { {"start_response" , (PyCFunction)py_start_response, METH_VARARGS, NULL }
@@ -58,6 +65,7 @@ static PyTypeObject py_client_t =
   , tp_basicsize: sizeof(py_client)
   , tp_flags: Py_TPFLAGS_DEFAULT
   , tp_methods: client_methods
+  , tp_dealloc: py_client_dealloc
   };
 
 static PyObject *
@@ -115,7 +123,6 @@ static PyObject* env_field(struct ebb_env_item *item)
     case EBB_REQUEST_PATH:    f = global_request_path; break;
     case EBB_QUERY_STRING:    f = global_query_string; break;
     case EBB_HTTP_VERSION:    f = global_http_version; break;
-    case EBB_SERVER_NAME:     f = global_server_name; break;
     case EBB_SERVER_PORT:     f = global_server_port; break;
     case EBB_CONTENT_LENGTH:  f = global_content_length; break;
     default: assert(FALSE);
@@ -186,7 +193,6 @@ void request_cb(ebb_client *client, void *ignore)
   Py_DECREF(arglist);
   Py_DECREF(environ);
   
-  
   PyObject *iterator = PyObject_GetIter(body);
   PyObject *body_item;
   while (body_item = PyIter_Next(iterator)) {
@@ -197,7 +203,7 @@ void request_cb(ebb_client *client, void *ignore)
     Py_DECREF(body_item);
   }
   
-  ebb_client_finished(client);
+  ebb_client_begin_transmission(client);
   
   Py_DECREF(pclient);
 }
@@ -248,7 +254,8 @@ PyMODINIT_FUNC initebb(void)
   
   base_env = PyDict_New();
   PyDict_SetStringString(base_env, "SCRIPT_NAME", "");
-  PyDict_SetStringString(base_env, "SERVER_SOFTWARE", "Ebb 0.0.4");
+  PyDict_SetStringString(base_env, "SERVER_SOFTWARE", EBB_VERSION);
+  PyDict_SetStringString(base_env, "SERVER_NAME", "0.0.0.0");
   PyDict_SetStringString(base_env, "SERVER_PROTOCOL", "HTTP/1.1");
   PyDict_SetStringString(base_env, "wsgi.url_scheme", "http");
   PyDict_SetItemString(base_env, "wsgi.multithread", Py_False);

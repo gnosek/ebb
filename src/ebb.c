@@ -511,6 +511,8 @@ void ebb_client_release(ebb_client *client)
 {
   assert(client->in_use);
   client->in_use = FALSE;
+  if(client->written == client->response_buffer->len)
+    ebb_client_close(client);
 }
 
 
