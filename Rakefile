@@ -4,7 +4,7 @@ require 'rake/gempackagetask'
 require 'rake/clean'
 
 COMMON_DISTFILES = FileList.new('src/ebb.{c,h}', 'src/parser.{c,h}', 
-  'libev/*', 'VERSION', 'README')
+  'libev/*', 'README')
 
 RUBY_DISTFILES = COMMON_DISTFILES + FileList.new('src/ebb_ruby.c', 
   'src/extconf.rb', 'ruby_lib/**/*', 'benchmark/*.rb', 'bin/ebb_rails', 
@@ -18,6 +18,10 @@ CLEAN.add ["**/*.{o,bundle,so,obj,pdb,lib,def,exp}", "benchmark/*.dump",
 
 CLOBBER.add ['src/Makefile', 'src/parser.c', 'src/mkmf.log', 'build']
 
+Rake::TestTask.new do |t|
+  t.test_files = FileList.new("test/*.rb")
+  t.verbose = true
+end
 
 def dir(path)
   File.expand_path File.join(File.dirname(__FILE__), path)
@@ -41,7 +45,7 @@ end
 
 task(:wc) { sh "wc -l ruby_lib/*.rb src/ebb*.{c,h}" }
 
-task(:test => :compile)
+task(:test => RUBY_DISTFILES)
 Rake::TestTask.new do |t|
   t.test_files = 'test/basic_test.rb'
   t.verbose = true

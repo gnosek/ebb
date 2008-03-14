@@ -1,6 +1,7 @@
 # Ruby Binding to the Ebb Web Server
 # Copyright (c) 2008 Ry Dahl. This software is released under the MIT License.
 # See README file for details.
+require 'stringio'
 module Ebb
   LIBDIR = File.dirname(__FILE__)
   require Ebb::LIBDIR + '/../src/ebb_ext'
@@ -17,24 +18,66 @@ module Ebb
     Client::BASE_ENV['rack.multithread'] = threaded_processing
     
     FFI::server_listen_on_port(port)
-    
-    puts "Ebb listening at http://0.0.0.0:#{port}/ (#{threaded_processing ? 'threaded' : 'sequential'} processing)"
-    trap('INT')  { @running = false }
     @running = true
+    #trap('INT')  { stop_server }
+    
+    puts "Ebb listening at http://0.0.0.0:#{port}/ (#{threaded_processing ? 'threaded' : 'sequential'} processing, PID #{Process.pid})"
     
     while @running
       FFI::server_process_connections()
       while client = FFI::waiting_clients.shift
         if threaded_processing
-          Thread.new(client) { |c| c.process(app) }
+          Thread.new(client) { |c| process(app, c) }
         else
-          client.process(app)
+          process(app, client)
         end
       end
     end
-    
-    puts "Ebb unlistening"
     FFI::server_unlisten()
+  end
+  
+  def self.running?
+    FFI::server_open?
+  end
+  
+  def self.stop_server()
+    @running = false
+  end
+  
+  def self.process(app, client)
+    begin
+      status, headers, body = app.call(client.env)
+    rescue
+      raise if $DEBUG
+      status = 500
+      headers = {'Content-Type' => 'text/plain'}
+      body = "Internal Server Error\n"
+    end
+    
+    client.write_status(status)
+    
+    if headers.respond_to?(:[]=) and body.respond_to?(:length) and status != 304
+      headers['Connection'] = 'close'
+      headers['Content-Length'] = body.length.to_s
+    end
+    
+    headers.each { |field, value| client.write_header(field, value) }
+    client.write("\r\n")
+    
+    if body.kind_of?(String)
+      client.write(body)
+      client.body_written()
+      client.begin_transmission()
+    else
+      client.begin_transmission()
+      client.body.each { |p| write(p) }
+      client.body_written()
+    end
+  rescue => e
+    puts "Ebb Error! #{e.class}  #{e.message}"
+    puts e.backtrace.join("\n")
+  ensure
+    client.release
   end
   
   # This array is created and manipulated in the C extension.
@@ -55,48 +98,15 @@ module Ebb
       'rack.run_once' => false
     }
     
-    def process(app)
-      begin
-        status, headers, body = app.call(env)
-      rescue
-        raise if $DEBUG
-        status = 500
-        headers = {'Content-Type' => 'text/plain'}
-        body = "Internal Server Error\n"
-      end
-      
-      status = status.to_i
-      FFI::client_write_status(self, status, HTTP_STATUS_CODES[status])
-      
-      if headers.respond_to?(:[]=) and body.respond_to?(:length) and status != 304
-        headers['Connection'] = 'close'
-        headers['Content-Length'] = body.length.to_s
-      end
-      
-      headers.each { |field, value| write_header(field, value) }
-      write("\r\n")
-      
-      if body.kind_of?(String)
-        write(body)
-        body_written()
-        begin_transmission()
-      else
-        begin_transmission()
-        body.each { |p| write(p) }
-        body_written()
-      end
-    rescue => e
-      puts "Error! #{e.class}  #{e.message}"
-    ensure
-      FFI::client_release(self)
-    end
-    
-    private
-    
     def env
       env = FFI::client_env(self).update(BASE_ENV)
       env['rack.input'] = RequestBody.new(self)
       env
+    end
+    
+    def write_status(status)
+      s = status.to_i
+      FFI::client_write_status(self, s, HTTP_STATUS_CODES[s])
     end
     
     def write(data)
@@ -116,6 +126,10 @@ module Ebb
     def begin_transmission
       FFI::client_begin_transmission(self)
     end
+    
+    def release
+      FFI::client_release(self)
+    end
   end
   
   class RequestBody
@@ -123,18 +137,35 @@ module Ebb
       @client = client
     end
     
-    def read(len)
-      FFI::client_read_input(@client, len)
+    def read(len = nil)
+      if @io
+        @io.read(len)
+      else
+        if len.nil?
+          s = ''
+          while(chunk = read(10*1024)) do
+            s << chunk
+          end
+          s
+        else
+          FFI::client_read_input(@client, len)
+        end
+      end
     end
     
     def gets
-      raise NotImplementedError
+      io.gets
     end
     
-    def each
-      raise NotImplementedError
+    def each(&block)
+      io.each(&block)
+    end
+    
+    def io
+      @io ||= StringIO.new(read)
     end
   end
+  
   
   HTTP_STATUS_CODES = {  
     100  => 'Continue', 

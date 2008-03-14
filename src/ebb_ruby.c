@@ -28,6 +28,7 @@ static VALUE global_http_host;
  */
 static ebb_server *server;
 struct ev_loop *loop;
+static unsigned int client_count = 0;
 
 /* Variables with a leading underscore are C-level variables */
 
@@ -42,6 +43,7 @@ void request_cb(ebb_client *client, void *data)
   VALUE waiting_clients = (VALUE)data;
   VALUE rb_client = Data_Wrap_Struct(cClient, 0, 0, client);
   rb_ary_push(waiting_clients, rb_client);
+  client_count++;
 }
 
 VALUE server_listen_on_port(VALUE _, VALUE port)
@@ -51,46 +53,35 @@ VALUE server_listen_on_port(VALUE _, VALUE port)
   return Qnil;
 }
 
-static void
-oneshot_timeout (struct ev_loop *loop, struct ev_timer *w, int revents) {;}
+VALUE server_open(VALUE _)
+{
+  return server->open ? Qtrue : Qfalse;
+}
+
 
 VALUE server_process_connections(VALUE _)
 {
-  /* This function is super hacky. The libev loop is called for one iteration
-   * this means that any pending events are handled. If no events exist then
-   * the function blocks. We want blocking so that the while loop in ruby 
-   * doesn't race away - however there is a need to continue to process other
-   * ruby threads which are running. While this function is being called 
-   * other ruby threads cannot execute.
-   * So we set this timeout event which breaks the block after 0.1 seconds.
-   * Additionally we make sure that other threads get enough processing time
-   * by calling rb_thread_schedule() many times.
-   *
-   * Instead we should probably use rb_thread_select on server->fd when no
-   * clients are in_use? Whatever happens here, one should make sure the
-   * 'wait' benchmark is running as quickly with Ebb as it does with mongrel.
-   */
-  ev_timer timeout;
-  ev_timer_init (&timeout, oneshot_timeout, 0.1, 0.);
-  ev_timer_start (loop, &timeout); 
-  ev_loop(loop, EVLOOP_ONESHOT);
-  
-  /* remove the timeout event so that it isn't called immediately the next
-   * time around (since 0.1 seconds will have passed)
-   */
-  ev_timer_stop(loop, &timeout);
-  
-  /* Call rb_thread_schedule() proportional to the number of rb threads running */
-  /* SO HACKY! Anyone have a better way to do this? */
+  int fd_count = 0, max_fd = 0;
+  struct timeval tv = { tv_sec: 0, tv_usec: 500000 };
   int i;
-  for(i = 0; i < EBB_MAX_CLIENTS; i++)
-    if(server->clients[i].in_use)
-      rb_thread_schedule();
   
-  if(server->open)
-    return Qtrue;
-  else
-    return Qfalse;
+  fd_set fds; FD_ZERO(&fds);
+  
+  FD_SET(server->fd, &fds); fd_count++;
+  for(i = 0; i < EBB_MAX_CLIENTS; i++) {
+    ebb_client *client = &server->clients[i];
+    if(client->open) {
+      FD_SET(client->fd, &fds); fd_count++;
+      if(client->fd > max_fd) max_fd = client->fd;
+    }
+  }
+  
+  unsigned int last_client_count = client_count;
+  ev_loop(loop, EVLOOP_NONBLOCK);
+  if(last_client_count == client_count) {
+    rb_thread_select(max_fd+1, &fds, &fds, &fds, &tv);
+    ev_loop(loop, EVLOOP_NONBLOCK);
+  }
 }
 
 
@@ -259,6 +250,7 @@ void Init_ebb_ext()
   rb_define_singleton_method(mFFI, "server_process_connections", server_process_connections, 0);
   rb_define_singleton_method(mFFI, "server_listen_on_port", server_listen_on_port, 1);
   rb_define_singleton_method(mFFI, "server_unlisten", server_unlisten, 0);
+  rb_define_singleton_method(mFFI, "server_open?", server_open, 0);
   
   cClient = rb_define_class_under(mEbb, "Client", rb_cObject);
   rb_define_singleton_method(mFFI, "client_read_input", client_read_input, 2);
