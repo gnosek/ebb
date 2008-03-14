@@ -4,9 +4,8 @@ Ebb aims to be a small and fast web server specifically for hosting
 web frameworks like Rails, Merb, and in the future Django.
 
 It is not meant to be a full featured web server like Lighttpd, Apache, or
-Nginx. Rather it should be used in multiplicity behind a 
-[load balancer](http://brainspl.at/articles/2007/11/09/a-fair-proxy-balancer-for-nginx-and-mongrel) 
-and a front-end server. It is not meant to serve static files in production.
+Nginx. Rather it should be used in multiplicity behind a load balancer and a
+front-end server. It is not meant to serve static files in production.
 
 ## Design
 
@@ -55,7 +54,8 @@ the [RubyForge project page](http://rubyforge.org/frs/?group_id=5640).
 Using the executable `ebb_rails` one can start Ebb with a Rails project. Use
 `ebb_rails -h` to see all of the options but to start one can try
 
-    cd my_rails_project/; ebb_rails start
+    cd my_rails_project/
+    ebb_rails start
 
 When using `ebb_rails` from monit, the monitrc entry might look like this:
 
