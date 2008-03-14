@@ -150,7 +150,7 @@
   field_value = any* >start_value %write_value;
 
   message_header = field_name ":" " "* field_value :> CRLF;
-  content_length = "Content-Length:"i " "* (digit{1,12} >mark %content_length) :> CRLF;
+  content_length = "Content-Length:"i " "* (digit+ >mark %content_length) :> CRLF;
 
   Request = Request_Line (content_length | message_header )* ( CRLF @done );
 
