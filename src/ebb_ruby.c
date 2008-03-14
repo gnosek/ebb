@@ -56,10 +56,28 @@ oneshot_timeout (struct ev_loop *loop, struct ev_timer *w, int revents) {;}
 
 VALUE server_process_connections(VALUE _)
 {
+  /* This function is super hacky. The libev loop is called for one iteration
+   * this means that any pending events are handled. If no events exist then
+   * the function blocks. We want blocking so that the while loop in ruby 
+   * doesn't race away - however there is a need to continue to process other
+   * ruby threads which are running. While this function is being called 
+   * other ruby threads cannot execute.
+   * So we set this timeout event which breaks the block after 0.1 seconds.
+   * Additionally we make sure that other threads get enough processing time
+   * by calling rb_thread_schedule() many times.
+   *
+   * Instead we should probably use rb_thread_select on server->fd when no
+   * clients are in_use? Whatever happens here, one should make sure the
+   * 'wait' benchmark is running as quickly with Ebb as it does with mongrel.
+   */
   ev_timer timeout;
-  ev_timer_init (&timeout, oneshot_timeout, 0.01, 0.);
+  ev_timer_init (&timeout, oneshot_timeout, 0.1, 0.);
   ev_timer_start (loop, &timeout); 
   ev_loop(loop, EVLOOP_ONESHOT);
+  
+  /* remove the timeout event so that it isn't called immediately the next
+   * time around (since 0.1 seconds will have passed)
+   */
   ev_timer_stop(loop, &timeout);
   
   /* Call rb_thread_schedule() proportional to the number of rb threads running */

@@ -58,7 +58,7 @@ struct ebb_client {
   ebb_server *server;
   http_parser parser;
   
-  char request_buffer[EBB_BUFFERSIZE];
+  char *request_buffer;
   ev_io read_watcher;
   size_t read, nread_from_body;
   

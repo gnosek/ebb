@@ -318,6 +318,9 @@ static client_init(ebb_server *server, ebb_client *client)
   client->read = client->nread_from_body = 0;
   client->response_buffer->len = 0; /* see note in ebb_client_close */
   client->content_length = 0;
+  if(client->request_buffer == NULL) {
+    client->request_buffer = (char*)malloc(EBB_BUFFERSIZE);
+  }
   
   client->status_written = FALSE;
   client->headers_written = FALSE;
@@ -391,6 +394,7 @@ void ebb_server_init( ebb_server *server
 {
   int i;
   for(i=0; i < EBB_MAX_CLIENTS; i++) {
+    server->clients[i].request_buffer = NULL;
     server->clients[i].response_buffer = g_string_new("");
     server->clients[i].open = FALSE;
     server->clients[i].in_use = FALSE;
