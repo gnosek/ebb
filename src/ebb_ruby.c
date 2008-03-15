@@ -28,7 +28,6 @@ static VALUE global_http_host;
  */
 static ebb_server *server;
 struct ev_loop *loop;
-static unsigned int client_count = 0;
 
 /* Variables with a leading underscore are C-level variables */
 
@@ -43,7 +42,6 @@ void request_cb(ebb_client *client, void *data)
   VALUE waiting_clients = (VALUE)data;
   VALUE rb_client = Data_Wrap_Struct(cClient, 0, 0, client);
   rb_ary_push(waiting_clients, rb_client);
-  client_count++;
 }
 
 VALUE server_listen_on_port(VALUE _, VALUE port)
@@ -53,35 +51,51 @@ VALUE server_listen_on_port(VALUE _, VALUE port)
   return Qnil;
 }
 
-VALUE server_open(VALUE _)
-{
-  return server->open ? Qtrue : Qfalse;
-}
-
-
 VALUE server_process_connections(VALUE _)
 {
-  int fd_count = 0, max_fd = 0;
-  struct timeval tv = { tv_sec: 0, tv_usec: 500000 };
+  /* This function is super hacky. The libev loop is called for one iteration
+   * this means that any pending events are handled. If no events exist then
+   * the function blocks. We want blocking so that the while loop in ruby 
+   * doesn't race away - however there is a need to continue to process other
+   * ruby threads which are running. While this function is being called 
+   * other ruby threads cannot execute.
+   * So we set this timeout event which breaks the block after 0.1 seconds.
+   * Additionally we make sure that other threads get enough processing time
+   * by calling rb_thread_schedule() many times.
+   *
+   * Instead we should probably use rb_thread_select on server->fd when no
+   * clients are in_use? Whatever happens here, one should make sure the
+   * 'wait' benchmark is running as quickly with Ebb as it does with mongrel.
+   */
+  
   int i;
-  
-  fd_set fds; FD_ZERO(&fds);
-  
-  FD_SET(server->fd, &fds); fd_count++;
-  for(i = 0; i < EBB_MAX_CLIENTS; i++) {
-    ebb_client *client = &server->clients[i];
-    if(client->open) {
-      FD_SET(client->fd, &fds); fd_count++;
-      if(client->fd > max_fd) max_fd = client->fd;
+  int running_clients = FALSE;
+  for(i = 0; i < EBB_MAX_CLIENTS; i++)
+    if(server->clients[i].open) {
+      running_clients = TRUE;
+      break;
     }
+  if(!running_clients) {
+    fd_set fds;
+    struct timeval tv = { tv_sec: 1, tv_usec: 0 };
+    FD_ZERO(&fds);
+    FD_SET(server->fd, &fds);
+    /* sit in ruby thread select for a second when there are no connections */
+    rb_thread_select(server->fd+1, &fds, &fds, &fds, &tv);
   }
   
-  unsigned int last_client_count = client_count;
+  if(!server->open)
+    return Qnil;
+  
   ev_loop(loop, EVLOOP_NONBLOCK);
-  if(last_client_count == client_count) {
-    rb_thread_select(max_fd+1, &fds, &fds, &fds, &tv);
-    ev_loop(loop, EVLOOP_NONBLOCK);
-  }
+  
+  /* Call rb_thread_schedule() proportional to the number of rb threads running */
+  /* SO HACKY! Anyone have a better way to do this? */
+  for(i = 0; i < EBB_MAX_CLIENTS; i++)
+    if(server->clients[i].in_use)
+      rb_thread_schedule();
+  
+  return Qnil;
 }
 
 
@@ -91,6 +105,10 @@ VALUE server_unlisten(VALUE _)
   return Qnil;
 }
 
+VALUE server_open(VALUE _)
+{
+  return server->open ? Qtrue : Qfalse;
+}
 
 VALUE env_field(struct ebb_env_item *item)
 {

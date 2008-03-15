@@ -19,7 +19,7 @@ module Ebb
     
     FFI::server_listen_on_port(port)
     @running = true
-    #trap('INT')  { stop_server }
+    trap('INT')  { stop_server }
     
     puts "Ebb listening at http://0.0.0.0:#{port}/ (#{threaded_processing ? 'threaded' : 'sequential'} processing, PID #{Process.pid})"
     
