@@ -28,6 +28,7 @@ static VALUE global_http_host;
  */
 static ebb_server *server;
 struct ev_loop *loop;
+struct ev_idle idle_watcher;
 
 /* Variables with a leading underscore are C-level variables */
 
@@ -54,34 +55,30 @@ VALUE server_listen_on_port(VALUE _, VALUE port)
 static void
 oneshot_timeout (struct ev_loop *loop, struct ev_timer *w, int revents) {;}
 
+static void
+idle_cb (struct ev_loop *loop, struct ev_idle *w, int revents) {
+  int i;
+  int running_clients = FALSE;
+  for(i = 0; i < EBB_MAX_CLIENTS; i++)
+    if(server->clients[i].open) {
+      running_clients = TRUE;
+      break;
+    }
+  if(!running_clients) {
+    fd_set fds;
+    struct timeval tv = { tv_sec: 1, tv_usec: 0 };
+    FD_ZERO(&fds);
+    FD_SET(server->fd, &fds);
+    /* sit in ruby thread select for a second when there are no connections */
+    // printf("enter select()\n");
+    rb_thread_select(server->fd+1, &fds, &fds, &fds, &tv);
+    // printf("leave select()\n");
+  }
+}
+
 VALUE server_process_connections(VALUE _)
 {
-  /* This function is super hacky. The libev loop is called for one iteration
-   * this means that any pending events are handled. If no events exist then
-   * the function blocks. We want blocking so that the while loop in ruby 
-   * doesn't race away - however there is a need to continue to process other
-   * ruby threads which are running. While this function is being called 
-   * other ruby threads cannot execute.
-   * So we set this timeout event which breaks the block after 0.1 seconds.
-   * Additionally we make sure that other threads get enough processing time
-   * by calling rb_thread_schedule() many times.
-   *
-   * Instead we should probably use rb_thread_select on server->fd when no
-   * clients are in_use? Whatever happens here, one should make sure the
-   * 'wait' benchmark is running as quickly with Ebb as it does with mongrel.
-   */
-  ev_timer timeout;
-  ev_timer_init (&timeout, oneshot_timeout, 0.1, 0.);
-  ev_timer_start (loop, &timeout); 
-  ev_loop(loop, EVLOOP_ONESHOT);
-  ev_timer_stop(loop, &timeout);
-  
-  /* Call rb_thread_schedule() proportional to the number of rb threads running */
-  /* SO HACKY! Anyone have a better way to do this? */
-  int i;
-  for(i = 0; i < EBB_MAX_CLIENTS; i++)
-    if(server->clients[i].in_use)
-      rb_thread_schedule();
+  ev_loop(loop, EVLOOP_NONBLOCK);
   
   return Qnil;
 }
@@ -270,6 +267,11 @@ void Init_ebb_ext()
   
   /* initialize ebb_server */
   loop = ev_default_loop (0);
+  ev_idle_init (&idle_watcher, idle_cb);
+  ev_idle_start (loop, &idle_watcher);
+  
+  
+  
   server = ebb_server_alloc();
   VALUE waiting_clients = rb_ary_new();
   rb_iv_set(mFFI, "@waiting_clients", waiting_clients);
