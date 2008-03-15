@@ -51,6 +51,9 @@ VALUE server_listen_on_port(VALUE _, VALUE port)
   return Qnil;
 }
 
+static void
+oneshot_timeout (struct ev_loop *loop, struct ev_timer *w, int revents) {;}
+
 VALUE server_process_connections(VALUE _)
 {
   /* This function is super hacky. The libev loop is called for one iteration
@@ -67,30 +70,15 @@ VALUE server_process_connections(VALUE _)
    * clients are in_use? Whatever happens here, one should make sure the
    * 'wait' benchmark is running as quickly with Ebb as it does with mongrel.
    */
-  
-  int i;
-  int running_clients = FALSE;
-  for(i = 0; i < EBB_MAX_CLIENTS; i++)
-    if(server->clients[i].open) {
-      running_clients = TRUE;
-      break;
-    }
-  if(!running_clients) {
-    fd_set fds;
-    struct timeval tv = { tv_sec: 1, tv_usec: 0 };
-    FD_ZERO(&fds);
-    FD_SET(server->fd, &fds);
-    /* sit in ruby thread select for a second when there are no connections */
-    rb_thread_select(server->fd+1, &fds, &fds, &fds, &tv);
-  }
-  
-  if(!server->open)
-    return Qnil;
-  
-  ev_loop(loop, EVLOOP_NONBLOCK);
+  ev_timer timeout;
+  ev_timer_init (&timeout, oneshot_timeout, 0.1, 0.);
+  ev_timer_start (loop, &timeout); 
+  ev_loop(loop, EVLOOP_ONESHOT);
+  ev_timer_stop(loop, &timeout);
   
   /* Call rb_thread_schedule() proportional to the number of rb threads running */
   /* SO HACKY! Anyone have a better way to do this? */
+  int i;
   for(i = 0; i < EBB_MAX_CLIENTS; i++)
     if(server->clients[i].in_use)
       rb_thread_schedule();
