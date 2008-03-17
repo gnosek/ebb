@@ -297,7 +297,12 @@ static client_init(ebb_server *server, ebb_client *client)
   /* DO SOCKET STUFF */
   socklen_t len;
   client->fd = accept(server->fd, (struct sockaddr*)&(server->sockaddr), &len);
-  assert(client->fd >= 0);
+  if(client->fd < 0) {
+    perror("accept()");
+    client->open = FALSE;
+    return;
+  }
+  
   int flags = fcntl(client->fd, F_GETFL, 0);
   assert(0 <= fcntl(client->fd, F_SETFL, flags | O_NONBLOCK));
   
