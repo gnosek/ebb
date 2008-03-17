@@ -40,7 +40,7 @@ struct ev_idle idle_watcher;
 # define RSTRING_LEN(s) (RSTRING(s)->len)
 #endif
 
-void attach_idle_watcher()
+static void attach_idle_watcher()
 {
   if(!ev_is_active(&idle_watcher)) {
     ev_idle_start (loop, &idle_watcher);
@@ -49,10 +49,18 @@ void attach_idle_watcher()
 }
 
 
-void detach_idle_watcher()
+static void detach_idle_watcher()
 {
   ev_idle_stop(loop, &idle_watcher);
   printf("detach!\n");
+}
+
+static int clients_in_use_p()
+{
+  int i;
+  for(i = 0; i < EBB_MAX_CLIENTS; i++)
+    if(server->clients[i].in_use) return TRUE;
+  return FALSE;
 }
 
 void request_cb(ebb_client *client, void *data)
@@ -72,10 +80,21 @@ VALUE server_listen_on_port(VALUE _, VALUE port)
 
 static void
 idle_cb (struct ev_loop *loop, struct ev_idle *w, int revents) {
-  if(rb_thread_alone()) {
-    detach_idle_watcher();
-  } else {
+  if(clients_in_use_p()) {
     rb_thread_schedule();
+  } else if(!rb_thread_alone()) {
+    /* if you have another long running thread running besides the ones used
+     * for the webapp's requests you will run into performance problems in 
+     * ruby 1.8.x because rb_thread_select is slow. 
+     * (Don't worry - you're probably not doing this.)
+     */
+    struct timeval tv = { tv_sec: 0, tv_usec: 50000 };
+    fd_set server_fd_set;
+    FD_ZERO(&server_fd_set);
+    FD_SET(server->fd, &server_fd_set);
+    rb_thread_select(server->fd+1, &server_fd_set, 0, 0, &tv);
+  } else {
+    detach_idle_watcher();
   }
 }
 
@@ -273,6 +292,8 @@ void Init_ebb_ext()
   loop = ev_default_loop (0);
   
   ev_idle_init (&idle_watcher, idle_cb);
+  attach_idle_watcher();
+  
   server = ebb_server_alloc();
   VALUE waiting_clients = rb_ary_new();
   rb_iv_set(mFFI, "@waiting_clients", waiting_clients);
