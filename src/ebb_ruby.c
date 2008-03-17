@@ -3,6 +3,8 @@
  * License. See README file for details.
  */
 #include <ruby.h>
+#include <rubyio.h>
+#include <rubysig.h>
 #include <assert.h>
 #include <fcntl.h>
 #include <ebb.h>
@@ -38,11 +40,27 @@ struct ev_idle idle_watcher;
 # define RSTRING_LEN(s) (RSTRING(s)->len)
 #endif
 
+void attach_idle_watcher()
+{
+  if(!ev_is_active(&idle_watcher)) {
+    ev_idle_start (loop, &idle_watcher);
+    printf("attach!\n");
+  }
+}
+
+
+void detach_idle_watcher()
+{
+  ev_idle_stop(loop, &idle_watcher);
+  printf("detach!\n");
+}
+
 void request_cb(ebb_client *client, void *data)
 {
   VALUE waiting_clients = (VALUE)data;
   VALUE rb_client = Data_Wrap_Struct(cClient, 0, 0, client);
   rb_ary_push(waiting_clients, rb_client);
+  attach_idle_watcher();
 }
 
 VALUE server_listen_on_port(VALUE _, VALUE port)
@@ -53,33 +71,19 @@ VALUE server_listen_on_port(VALUE _, VALUE port)
 }
 
 static void
-oneshot_timeout (struct ev_loop *loop, struct ev_timer *w, int revents) {;}
-
-static void
 idle_cb (struct ev_loop *loop, struct ev_idle *w, int revents) {
-  int i;
-  int running_clients = FALSE;
-  for(i = 0; i < EBB_MAX_CLIENTS; i++)
-    if(server->clients[i].open) {
-      running_clients = TRUE;
-      break;
-    }
-  if(!running_clients) {
-    fd_set fds;
-    struct timeval tv = { tv_sec: 1, tv_usec: 0 };
-    FD_ZERO(&fds);
-    FD_SET(server->fd, &fds);
-    /* sit in ruby thread select for a second when there are no connections */
-    // printf("enter select()\n");
-    rb_thread_select(server->fd+1, &fds, &fds, &fds, &tv);
-    // printf("leave select()\n");
+  if(rb_thread_alone()) {
+    detach_idle_watcher();
+  } else {
+    rb_thread_schedule();
   }
 }
 
 VALUE server_process_connections(VALUE _)
 {
-  ev_loop(loop, EVLOOP_NONBLOCK);
-  
+  TRAP_BEG;
+  ev_loop(loop, EVLOOP_ONESHOT);
+  TRAP_END;
   return Qnil;
 }
 
@@ -267,11 +271,8 @@ void Init_ebb_ext()
   
   /* initialize ebb_server */
   loop = ev_default_loop (0);
+  
   ev_idle_init (&idle_watcher, idle_cb);
-  ev_idle_start (loop, &idle_watcher);
-  
-  
-  
   server = ebb_server_alloc();
   VALUE waiting_clients = rb_ary_new();
   rb_iv_set(mFFI, "@waiting_clients", waiting_clients);
