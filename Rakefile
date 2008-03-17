@@ -8,7 +8,7 @@ COMMON_DISTFILES = FileList.new('src/ebb.{c,h}', 'src/parser.{c,h}',
 
 RUBY_DISTFILES = COMMON_DISTFILES + FileList.new('src/ebb_ruby.c', 
   'src/extconf.rb', 'ruby_lib/**/*', 'benchmark/*.rb', 'bin/ebb_rails', 
-  'test/*')
+  'test/*.rb')
 
 PYTHON_DISTFILES = COMMON_DISTFILES + FileList.new('setup.py', 
   'src/ebb_python.c')
@@ -27,12 +27,19 @@ def dir(path)
   File.expand_path File.join(File.dirname(__FILE__), path)
 end
 
-task(:default => :test)
+task(:default => [:compile, :test])
+
+task(:compile => ['src/Makefile', 'src/ebb.c', 'src/ebb.h', 'src/ebb_ruby.c', 'src/parser.c']) do
+  sh "cd #{dir('src')} && make"
+end
+
+file('src/Makefile' => 'src/extconf.rb') do
+    sh "cd #{dir('src')} && ruby extconf.rb"
+end
 
 task(:package => 'src/parser.c')
-
-task(:compile => 'src/parser.c') do 
-  sh "cd #{dir('src')} && ruby extconf.rb && make"
+file('src/parser.c' => 'src/parser.rl') do
+  sh 'ragel -s -G2 src/parser.rl'
 end
 
 file('MANIFEST') do
@@ -40,8 +47,6 @@ file('MANIFEST') do
     PYTHON_DISTFILES.each { |file| manifest.puts(file) }
   end
 end
-
-
 
 task(:wc) { sh "wc -l ruby_lib/*.rb src/ebb*.{c,h}" }
 
@@ -101,9 +106,4 @@ end
 
 Rake::GemPackageTask.new(spec) do |pkg|
   pkg.need_zip = true
-end
-
-## Compile 
-file('src/parser.c' => 'src/parser.rl') do
-  sh 'ragel -s -G2 src/parser.rl'
 end
