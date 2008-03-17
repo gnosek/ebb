@@ -44,7 +44,6 @@ static void attach_idle_watcher()
 {
   if(!ev_is_active(&idle_watcher)) {
     ev_idle_start (loop, &idle_watcher);
-    printf("attach!\n");
   }
 }
 
@@ -52,7 +51,6 @@ static void attach_idle_watcher()
 static void detach_idle_watcher()
 {
   ev_idle_stop(loop, &idle_watcher);
-  printf("detach!\n");
 }
 
 static int clients_in_use_p()
@@ -88,11 +86,11 @@ idle_cb (struct ev_loop *loop, struct ev_idle *w, int revents) {
      * ruby 1.8.x because rb_thread_select is slow. 
      * (Don't worry - you're probably not doing this.)
      */
-    struct timeval tv = { tv_sec: 0, tv_usec: 50000 };
+    struct timeval select_timeout = { tv_sec: 0, tv_usec: 50000 };
     fd_set server_fd_set;
     FD_ZERO(&server_fd_set);
     FD_SET(server->fd, &server_fd_set);
-    rb_thread_select(server->fd+1, &server_fd_set, 0, 0, &tv);
+    rb_thread_select(server->fd+1, &server_fd_set, 0, 0, &select_timeout);
   } else {
     detach_idle_watcher();
   }
