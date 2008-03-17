@@ -21,7 +21,7 @@ module Ebb
     @running = true
     trap('INT')  { stop_server }
     
-    puts "Ebb listening at http://0.0.0.0:#{port}/ (#{threaded_processing ? 'threaded' : 'sequential'} processing, PID #{Process.pid})"
+    log.puts "Ebb listening at http://0.0.0.0:#{port}/ (#{threaded_processing ? 'threaded' : 'sequential'} processing, PID #{Process.pid})"
     
     while @running
       FFI::server_process_connections()
@@ -74,10 +74,18 @@ module Ebb
       client.body_written()
     end
   rescue => e
-    puts "Ebb Error! #{e.class}  #{e.message}"
-    puts e.backtrace.join("\n")
+    log.puts "Ebb Error! #{e.class}  #{e.message}"
+    log.puts e.backtrace.join("\n")
   ensure
     client.release
+  end
+  
+  @@log = STDOUT
+  def self.log=(output)
+    @@log = output
+  end
+  def self.log
+    @@log
   end
   
   # This array is created and manipulated in the C extension.

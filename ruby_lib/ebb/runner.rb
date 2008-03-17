@@ -20,6 +20,10 @@ end
 
 module Ebb
   class Runner
+    # Classes are modules and I hate this 'Base' class pattern. I'm putting
+    # other classes inside this one.
+    autoload :Rails, LIBDIR + '/ebb/runner/rails'
+    
     # Kill the process which PID is stored in +pid_file+.
     def self.kill(pid_file, timeout=60)
       raise ArgumentError, 'You must specify a pid_file to stop deamonized server' unless pid_file 
@@ -28,12 +32,12 @@ module Ebb
         pid = pid.to_i
         
         Process.kill('KILL', pid)
-        puts "stopped!"
+        Ebb.log.puts "stopped!"
       else
-        puts "Can't stop process, no PID found in #{@pid_file}"
+        Ebb.log.puts "Can't stop process, no PID found in #{@pid_file}"
       end
     rescue Errno::ESRCH # No such process
-      puts "process not found!"
+      Ebb.log.puts "process not found!"
     ensure
       File.delete(pid_file) rescue nil
     end
@@ -43,13 +47,14 @@ module Ebb
     end
 
     def self.write_pid_file(file)
-      puts ">> Writing PID to #{file}"
+      Ebb.log.puts ">> Writing PID to #{file}"
       open(file,"w+") { |f| f.write(Process.pid) }
       File.chmod(0644, file)
     end
     
-    def initialize(argv)
-      @argv = argv
+    attr_reader :options
+    
+    def initialize
       @parser = OptionParser.new
       @options = {
         :port => 4001,
@@ -58,8 +63,7 @@ module Ebb
       }
     end
     
-    
-    def run
+    def parse_options(argv)
       @parser.banner = "Usage: #{self.class} [options] start | stop"
       @parser.separator ""
       extra_options if respond_to?(:extra_options)
@@ -74,22 +78,26 @@ module Ebb
       
       @parser.separator ""
       @parser.on_tail("-h", "--help", "Show this message") do
-        puts @parser
+        Ebb.log.puts @parser
         exit
       end
       @parser.on_tail('-v', '--version', "Show version") do
-        puts "Ebb #{Ebb::VERSION}"
+        Ebb.log.puts "Ebb #{Ebb::VERSION}"
         exit
       end
       
-      @parser.parse!(@argv)
+      @parser.parse!(argv)
+    end
+    
+    def run(argv)
+      parse_options(argv)
       
-      case @argv[0]
+      case argv[0]
       when 'start'
-        STDOUT.print("Ebb is loading the application...")
-        STDOUT.flush()
+        Ebb.log.print("Ebb is loading the application...")
+        Ebb.log.flush()
         @app = app(@options)
-        STDOUT.puts("loaded")
+        Ebb.log.puts("loaded")
         
         if @options[:daemonize]
           pwd = Dir.pwd # Current directory is changed during daemonization, so store it
@@ -105,7 +113,7 @@ module Ebb
         if @options[:pid_file]
           Runner.write_pid_file(@options[:pid_file])
           at_exit do
-            puts ">> Exiting!"
+            Ebb.log.puts ">> Exiting!"
             Runner.remove_pid_file(@options[:pid_file])
           end
         end
@@ -114,8 +122,8 @@ module Ebb
       when 'stop'
         Ebb::Runner.kill @options[:pid_file], @options[:timeout]
       when nil
-        puts "Command required"
-        puts @parser
+        Ebb.log.puts "Command required"
+        Ebb.log.puts @parser
         exit 1
       else
         abort "Invalid command : #{argv[0]}"
@@ -124,3 +132,4 @@ module Ebb
     end
   end
 end
+

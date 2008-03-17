@@ -1,4 +1,6 @@
 require 'cgi'
+require 'rubygems'
+require 'rack'
 
 # Adapter to run a Rails app with any supported Rack handler.
 # By default it will try to load the Rails application in the

@@ -5,18 +5,14 @@ require 'net/http'
 require 'socket'
 require 'rubygems'
 require 'json'
+require 'ruby-debug'
+Debugger.start
 
-include Ebb
+
+Ebb.log = File.open('/dev/null','w')
 
 TEST_PORT = 4044
 
-def get(path)
-  Net::HTTP.get_response(URI.parse("http://0.0.0.0:#{TEST_PORT}#{path}"))
-end
-
-def post(path, data)
-  Net::HTTP.post_form(URI.parse("http://0.0.0.0:#{TEST_PORT}#{path}"), data)
-end
 
 class HelperApp
   def call(env)
@@ -40,17 +36,42 @@ class HelperApp
         body = "Content-Length header is #{content_length_header} but body length is #{input_body.length}"
         status = 500
       end
-    
+      
     else
       status = 404
       body = "Undefined url"
     end
     
-    [status, {'Content-Type' => 'text/plain'}, body]
+    env['rack.input'] = env['rack.input'].read
+    env.delete('rack.errors')
+    env['output'] = body
+    env['status'] = status
+    
+    [status, {'Content-Type' => 'text/json'}, env.to_json]
+  end
+end
+
+class Test::Unit::TestCase
+  def get(path)
+    response = Net::HTTP.get_response(URI.parse("http://0.0.0.0:#{TEST_PORT}#{path}"))
+  end
+  
+  def post(path, data)
+    response = Net::HTTP.post_form(URI.parse("http://0.0.0.0:#{TEST_PORT}#{path}"), data)
   end
 end
 
 class ServerTest < Test::Unit::TestCase
+  def get(path)
+    response = Net::HTTP.get_response(URI.parse("http://0.0.0.0:#{TEST_PORT}#{path}"))
+    env = JSON.parse(response.body)
+  end
+
+  def post(path, data)
+    response = Net::HTTP.post_form(URI.parse("http://0.0.0.0:#{TEST_PORT}#{path}"), data)
+    env = JSON.parse(response.body)
+  end
+  
   def setup
     Thread.new { Ebb.start_server(HelperApp.new, :port => TEST_PORT) }
     sleep 0.1 until Ebb.running?
@@ -59,5 +80,9 @@ class ServerTest < Test::Unit::TestCase
   def teardown
     Ebb.stop_server
     sleep 0.1 while Ebb.running?
+  end
+  
+  def default_test
+    assert true
   end
 end
