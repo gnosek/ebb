@@ -20,13 +20,6 @@ end
 
 module Ebb
   class Runner
-    DEFAULT_OPTIONS = {
-      :port         => 4001,
-      :timeout      => 60,
-      :workers      => 1,
-      :threaded_processing => true
-    }
-    
     # Kill the process which PID is stored in +pid_file+.
     def self.kill(pid_file, timeout=60)
       raise ArgumentError, 'You must specify a pid_file to stop deamonized server' unless pid_file 
@@ -55,90 +48,79 @@ module Ebb
       File.chmod(0644, file)
     end
     
-    def initialize(name, &definitions)
-      @name = name
-      instance_eval(&definitions)
-      run
+    def initialize(argv)
+      @argv = argv
+      @parser = OptionParser.new
+      @options = {
+        :port => 4001,
+        :timeout => 60,
+        :threaded_processing => true
+      }
     end
     
+    
     def run
-      option_parser, options = get_options_from_command_line
+      @parser.banner = "Usage: #{self.class} [options] start | stop"
+      @parser.separator ""
+      extra_options if respond_to?(:extra_options)
       
+      @parser.separator ""
+      #  opts.on("-s", "--socket SOCKET", "listen on socket") { |socket| options[:socket] = socket }
+      @parser.on("-p", "--port PORT", "(default: #{@options[:port]})") { |p| @options[:port]=p }
+      @parser.on("-d", "--daemonize", "Daemonize") { @options[:daemonize] = true }
+      @parser.on("-l", "--log-file FILE", "File to redirect output") { |f| @options[:log_file]=f }
+      @parser.on("-P", "--pid-file FILE", "File to store PID") { |f| @options[:pid_file]=f }
+      # @parser.on("-t", "--timeout SECONDS", "(default: #{@options[:timeout]})") { |s| @options[:timeout]=s }
       
-      case ARGV[0]
+      @parser.separator ""
+      @parser.on_tail("-h", "--help", "Show this message") do
+        puts @parser
+        exit
+      end
+      @parser.on_tail('-v', '--version', "Show version") do
+        puts "Ebb #{Ebb::VERSION}"
+        exit
+      end
+      
+      @parser.parse!(@argv)
+      
+      case @argv[0]
       when 'start'
         STDOUT.print("Ebb is loading the application...")
         STDOUT.flush()
-        @app = app(options)
+        @app = app(@options)
         STDOUT.puts("loaded")
         
-        if options[:daemonize]
+        if @options[:daemonize]
           pwd = Dir.pwd # Current directory is changed during daemonization, so store it
           Kernel.daemonize 
           Dir.chdir pwd
           trap('HUP', 'IGNORE') # Don't die upon logout
         end
         
-        if options[:log_file]
-          [STDOUT, STDERR].each { |f| f.reopen log_file, 'a' } 
+        if @options[:log_file]
+          [STDOUT, STDERR].each { |f| f.reopen @options[:log_file], 'a' } 
         end
         
-        if options[:pid_file]
-          Runner.write_pid_file(options[:pid_file])
+        if @options[:pid_file]
+          Runner.write_pid_file(@options[:pid_file])
           at_exit do
             puts ">> Exiting!"
-            Runner.remove_pid_file(options[:pid_file])
+            Runner.remove_pid_file(@options[:pid_file])
           end
         end
         
-        Ebb::start_server(@app, options)
+        Ebb::start_server(@app, @options)
       when 'stop'
-        Ebb::Runner.kill options[:pid_file], options[:timeout]
+        Ebb::Runner.kill @options[:pid_file], @options[:timeout]
       when nil
         puts "Command required"
-        puts option_parser
+        puts @parser
         exit 1
       else
-        abort "Invalid command : #{ARGV[0]}"
+        abort "Invalid command : #{argv[0]}"
       end
-    end
-    
-    
-    def get_options_from_command_line
-      options = DEFAULT_OPTIONS.dup
-      option_parser = OptionParser.new do |parser|
-        parser.banner = "Usage: #{@name} [options] start | stop"
-        parser.separator ""
-        if respond_to?(:add_extra_options)
-          add_extra_options(parser, options)
-        end
-        parser.separator ""
-        #  opts.on("-s", "--socket SOCKET", "listen on socket")                 { |socket| options[:socket] = socket }
-        parser.on("-p", "--port PORT", "(default: #{options[:port]})") { |p| options[:port]=p }
-        parser.on("-d", "--daemonize", "Daemonize") { options[:daemonize] = true }
-        parser.on("-l", "--log-file FILE", "File to redirect output") { |f| options[:log_file]=f }
-        parser.on("-P", "--pid-file FILE", "File to store PID") { |f| options[:pid_file]=f }
-        parser.on("-t", "--timeout SECONDS", "(default: #{options[:timeout]})") { |s| options[:timeout]=s }
-        #parser.on("-w", "--workers WORKERS", "Number of worker threads (default: #{options[:workers]})") { |w| options[:workers]=w }
-        parser.on("-w", "-- WORKERS", "Number of worker threads (default: #{options[:workers]})") { |w| options[:workers]=w }
-        
-        parser.on("-S", "--sequential", "do not use threaded processing") do
-          options[:threaded_processing] = false
-        end
-        
-        parser.separator ""
-        parser.on_tail("-h", "--help", "Show this message") do
-          puts parser
-          exit
-        end
-        parser.on_tail('-v', '--version', "Show version") do
-          puts "Ebb #{Ebb::VERSION}"
-          exit
-        end
-      end
-      option_parser.parse!(ARGV)
-      [option_parser, options]
+      
     end
   end
-
 end

@@ -10,20 +10,23 @@ module Rack
   end
 end
 
-Ebb::Runner.new('ebb_rails') do
-  def add_extra_options(parser, options)
+class EbbRails < Ebb::Runner
+  def extra_options
     # defaults for ebb_rails
-    options.update(
+    @options.update(
       :environment => 'development',
       :port => 3000,
-      # rails has a massive mutex lock around each request - threaded processing
+      # rails has a mutex lock around each request - threaded processing
       # will only slow things down
       :threaded_processing => false
     )
     
-    parser.on("-e", "--env ENV", 
+    @parser.on("-e", "--env ENV", 
             "Rails environment (default: development)") do |env| 
-      options[:environment] = env
+      @options[:environment] = env
+    end
+    @parser.on("-c", "--chdir DIR", "RAILS_ROOT directory") do |c| 
+      @options[:root] = c
     end
   end
   
@@ -31,3 +34,5 @@ Ebb::Runner.new('ebb_rails') do
     Rack::Adapter::Rails.new(options)
   end
 end
+
+EbbRails.new(ARGV).run

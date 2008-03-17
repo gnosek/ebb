@@ -70,7 +70,7 @@ module Ebb
       client.begin_transmission()
     else
       client.begin_transmission()
-      client.body.each { |p| write(p) }
+      body.each { |p| client.write(p) }
       client.body_written()
     end
   rescue => e
