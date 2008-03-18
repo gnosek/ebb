@@ -3,6 +3,7 @@ require 'socket'
 require 'rubygems'
 require 'json'
 require 'test/unit'
+require 'digest/sha1'
 
 def send_request(request_string)
   socket = TCPSocket.new("0.0.0.0", TEST_PORT)
