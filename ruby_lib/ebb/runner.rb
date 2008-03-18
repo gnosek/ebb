@@ -97,7 +97,7 @@ module Ebb
         Ebb.log.print("Ebb is loading the application...")
         Ebb.log.flush()
         @app = app(@options)
-        Ebb.log.puts("loaded")
+        Ebb.log.puts("done")
         
         if @options[:daemonize]
           pwd = Dir.pwd # Current directory is changed during daemonization, so store it

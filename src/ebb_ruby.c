@@ -268,7 +268,7 @@ void Init_ebb_ext()
   DEF_GLOBAL(request_body, "REQUEST_BODY");
   DEF_GLOBAL(server_port, "SERVER_PORT");
   DEF_GLOBAL(path_info, "PATH_INFO");
-  DEF_GLOBAL(content_length, "HTTP_CONTENT_LENGTH");
+  DEF_GLOBAL(content_length, "CONTENT_LENGTH");
   DEF_GLOBAL(http_host, "HTTP_HOST");
   
   rb_define_singleton_method(mFFI, "server_process_connections", server_process_connections, 0);

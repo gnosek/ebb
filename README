@@ -102,14 +102,16 @@ buffer is set at 40 kilobytes before it writes to file.
 
 ## Contributions
 
-Contributions (patches, criticism, advice) are very welcome! The source code
+Contributions (patches, criticism, advice) are very welcome! 
+All should be posted to http://groups.google.com/group/ebbebb or emailed to me.
+
+The source code
 is hosted [github](http://github.com/ry/ebb/tree/master). It can be retrieved 
 by executing
 
     git clone git://github.com/ry/ebb.git
 
-I intend to keep the C code base very small, so do email me before writing any
-large additions. Here are some features that I would like to add:
+Here are some features that I would like to add:
 * HTTP 1.1 Expect/Continue (RFC 2616, sections 8.2.3 and 10.1.1)
 * A parser for multipart/form-data
 * Optimize and clean up upload handling
