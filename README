@@ -1,39 +1,20 @@
 # A Web Server Called *Ebb*
 
 Ebb aims to be a small and fast web server specifically for hosting 
-web frameworks like Rails, Merb, and in the future Django.
+dynamic web applications. It is not meant to be a full featured web server
+like Lighttpd, Apache, or Nginx. Rather it should be used in multiplicity
+behind a load balancer and a front-end server. It is not meant to serve static files in production.
 
-It is not meant to be a full featured web server like Lighttpd, Apache, or
-Nginx. Rather it should be used in multiplicity behind a load balancer and a
-front-end server. It is not meant to serve static files in production.
+At one level Ebb is a minimalist C library that ties together the 
+[Mongrel state machine](http://mongrel.rubyforge.org/browser/tags/rel_1-0-1/ext/http11/http11_parser.rl) 
+and [libev](http://software.schmorp.de/pkg/libev.html) event loop. One can use
+this library to drive a web application written in C. (Perhaps for embedded 
+devices?) However, most people will be interested in the binding of this
+library to the Ruby programming language. The binding provides a
+[Rack](http://rack.rubyforge.org/) server interface that allows it to host
+Rails, Merb, or other frameworks.
 
-## Design
-
-The design is similar to the [Evented
-Mongrel](http://swiftiply.swiftcore.org/mongrel.html) web server; except
-instead of using [EventMachine](http://rubyeventmachine.com/) to drive
-network interactions, the Ebb web server handles sockets directly in C and
-employs the use of the [libev](http://software.schmorp.de/pkg/libev.html)
-event loop.
-
-Connections are processed as follows:
-
-1. libev loops and waits for incoming connections.
-
-2. When Ebb receives a connection, it passes the request into the
-   [mongrel state machine](http://mongrel.rubyforge.org/browser/tags/rel_1-0-1/ext/http11/http11_parser.rl) 
-   which securely parses the headers.
-
-3. When the request is complete, Ebb passes the information to a user
-   supplied callback.
-
-4. The Ruby binding supplying this callback transforms the
-   request into a [Rack](http://rack.rubyforge.org/) compatible `env` hash 
-   and passes it on a Rack adapter.
-
-Because Ebb is written mostly in C, other language bindings can be added to
-make it useful to Non-Ruby frameworks. For example, a Python WSGI interface is
-forthcoming.
+A Python-WSGI binding is under development.
 
 ## Install
 
@@ -70,40 +51,24 @@ When using `ebb_rails` from monit, the monitrc entry might look like this:
 To use Ebb with a different framework you will have to do a small amount of
 hacking at the moment! :)
 
-## Why?
+## Speed
 
-Because by building the server in C one is able to side-step the 
-limitations on speed of many scripting languages. Inefficiencies are okay
-for quick and beautiful code, but for production web servers that might handle
-thousands of requests a second, an attempt should be made to be as efficient
-as possible in processing connections.
+Because Ebb-Ruby handles most of the processing in C, it is able to do work
+often times more efficiently than other Ruby language web servers.
 
-Following are some benchmarks. Please take these measurements with a grain of
-salt. Benchmarks like these are notorious for presenting an inaccurate or
-highly slanted view of how software performs. These are tests using a very
-simple Rack applications, not with Ruby-on-Rails. The code for these can be
-found in the `benchmark` directory.
+![Benchmark](http://s3.amazonaws.com/four.livejournal/20080311/ebb.png)
 
-![Response Size](http://s3.amazonaws.com/four.livejournal/20080227/response_size.png)
-
-This shows how the web servers perform with respect to throughput (using a 
-simple Rack application). Concurrency is at 50 clients.
-
-![Concurrency](http://s3.amazonaws.com/four.livejournal/20080227/concurrency.png)
-
-A simple concurrent clients benchmark serving a *hello world* page.
-
-![Uploads](http://s3.amazonaws.com/four.livejournal/20080227/post_size.png)
-
-Ebb processes uploads before handing it over to the web application. This 
-allows Ebb to continue to process other clients while the upload is in 
-progress. The cliff at 40k here is because Ebb's internal request
-buffer is set at 40 kilobytes before it writes to file.
+Ebb-Ruby can handle threaded processing better than the other 'evented' 
+servers. This won't be of any benefit to Rails applications because Rails
+places a lock around each request that wouldn't allow concurrent processing
+anyway. In Merb, for example, Ebb's thread handling will allow Ebb instances
+to handle larger loads. [More](http://four.livejournal.com/848525.html)
 
 ## Contributions
 
 Contributions (patches, criticism, advice) are very welcome! 
-All should be posted to http://groups.google.com/group/ebbebb or emailed to me.
+Please send all to to 
+[the mailing list](http://groups.google.com/group/ebbebb).
 
 The source code
 is hosted [github](http://github.com/ry/ebb/tree/master). It can be retrieved 
