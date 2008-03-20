@@ -173,6 +173,9 @@ class ServerTest
     
     return nil unless r =~ /Requests per second:\s*(\d+\.\d\d)/
     rps = $1.to_f
+    if r =~ /Time taken for tests:\s*(\d+\.\d+) seconds/
+      time_taken = $1.to_f
+    end
     if r =~ /Complete requests:\s*(\d+)/
       requests_completed = $1.to_i
     end
@@ -181,11 +184,14 @@ class ServerTest
     else
       raise "didn't get how many failed requests from ab"
     end
-    puts "   #{rps} req/sec (#{requests_completed} completed, #{failed_requests} failed)"
+    successful_requests = requests_completed - failed_requests
+    puts "  #{rps} req/sec (#{requests_completed} total, #{failed_requests} failed in #{"%.2f" % time_taken} seconds)"
+    puts "  #{"%.2f" % (successful_requests/time_taken)} successful req/sec"
     
     {
       :server => @name,
       :rps => rps,
+      :time_taken => time_taken,
       :requests_completed => requests_completed,
       :requests_failed => failed_requests,
       :ab_cmd => cmd

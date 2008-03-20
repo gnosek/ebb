@@ -1,3 +1,4 @@
+#!/usr/bin/env ruby 
 # supply the benchmark dump file as an argumetn to this program
 require 'rubygems'
 require 'google_chart'

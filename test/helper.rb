@@ -5,8 +5,6 @@ require 'net/http'
 require 'socket'
 require 'rubygems'
 require 'json'
-require 'ruby-debug'
-Debugger.start
 
 
 Ebb.log = File.open('/dev/null','w')

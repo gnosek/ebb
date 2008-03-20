@@ -21,7 +21,8 @@ class SimpleApp
   end
   
   def call(env)
-    commands = env['PATH_INFO'].split('/')
+    path = env['PATH_INFO'] || env['REQUEST_URI']
+    commands = path.split('/')
     
     @count += 1
     if commands.include?('periodical_activity') and @count % 10 != 1
@@ -73,9 +74,6 @@ end
 
 
 if $0 == __FILE__
-  require 'rubygems'
-  require 'ruby-debug'
-  Debugger.start
   require DIR + '/../ruby_lib/ebb'
   server = Ebb::start_server(SimpleApp.new, :port => 4001)
 end
