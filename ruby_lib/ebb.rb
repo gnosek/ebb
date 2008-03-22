@@ -100,9 +100,11 @@ module Ebb
     }
     
     def env
-      env = FFI::client_env(self).update(BASE_ENV)
-      env['rack.input'] = RequestBody.new(self)
-      env
+      @env ||= begin
+        env = FFI::client_env(self).update(BASE_ENV)
+        env['rack.input'] = RequestBody.new(self)
+        env
+      end
     end
     
     def write_status(status)

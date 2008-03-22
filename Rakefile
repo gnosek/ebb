@@ -29,7 +29,7 @@ end
 
 task(:default => [:compile, :test])
 
-task(:compile => ['src/Makefile', 'src/ebb.c', 'src/ebb.h', 'src/ebb_ruby.c', 'src/parser.c']) do
+task(:compile => ['src/Makefile', 'src/ebb.c', 'src/ebb.h', 'src/ebb_ruby.c', 'src/parser.c', 'src/parser.h']) do
   sh "cd #{dir('src')} && make"
 end
 

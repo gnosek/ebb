@@ -21,9 +21,10 @@ static VALUE global_http_version;
 static VALUE global_request_body;
 static VALUE global_server_port;
 static VALUE global_path_info;
-static VALUE global_content_length;
-static VALUE global_content_type;
-static VALUE global_http_host;
+static VALUE global_http_content_length;
+static VALUE global_http_content_type;
+static VALUE global_http_content_type;
+static VALUE global_http_accept;
 
 /* You don't want to run more than one server per Ruby VM. Really
  * I'm making this explicit by not defining a Ebb::Server class but instead
@@ -140,8 +141,9 @@ VALUE env_field(struct ebb_env_item *item)
     case MONGREL_QUERY_STRING:    return global_query_string;
     case MONGREL_HTTP_VERSION:    return global_http_version;
     case MONGREL_SERVER_PORT:     return global_server_port;
-    case MONGREL_CONTENT_LENGTH:  return global_content_length;
-    case MONGREL_CONTENT_TYPE:    return global_content_type;
+    case MONGREL_ACCEPT:          return global_http_accept;
+    case MONGREL_CONTENT_LENGTH:  return global_http_content_length;
+    case MONGREL_CONTENT_TYPE:    return global_http_content_type;
   }
   fprintf(stderr, "Unknown environ type: %d", item->type);
   assert(FALSE);
@@ -253,9 +255,9 @@ void Init_ebb_ext()
   DEF_GLOBAL(request_body, "REQUEST_BODY");
   DEF_GLOBAL(server_port, "SERVER_PORT");
   DEF_GLOBAL(path_info, "PATH_INFO");
-  DEF_GLOBAL(content_length, "HTTP_CONTENT_LENGTH");
-  DEF_GLOBAL(content_type, "HTTP_CONTENT_TYPE");
-  DEF_GLOBAL(http_host, "HTTP_HOST");
+  DEF_GLOBAL(http_content_length, "HTTP_CONTENT_LENGTH");
+  DEF_GLOBAL(http_content_type, "HTTP_CONTENT_TYPE");
+  DEF_GLOBAL(http_accept, "HTTP_ACCEPT");
   
   rb_define_singleton_method(mFFI, "server_process_connections", server_process_connections, 0);
   rb_define_singleton_method(mFFI, "server_listen_on_port", server_listen_on_port, 1);

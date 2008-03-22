@@ -21,6 +21,7 @@ enum { MONGREL_REQUEST_METHOD
      , MONGREL_HTTP_VERSION
      , MONGREL_CONTENT_LENGTH
      , MONGREL_CONTENT_TYPE
+     , MONGREL_ACCEPT
      /* below - not used in the parser but often used by users of parser */
      , MONGREL_SERVER_PORT 
      };

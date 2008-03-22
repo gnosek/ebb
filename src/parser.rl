@@ -38,13 +38,18 @@
     }
   }
   
-  action content_length {
+  action http_accept {
+    if(LEN(mark, fpc) > 1024) { parser->overflow_error = TRUE; fbreak; }
+    parser->on_element(parser->data, MONGREL_ACCEPT, PTR_TO(mark), LEN(mark, fpc));
+  }
+  
+  action http_content_length {
     if(LEN(mark, fpc) > 20) { parser->overflow_error = TRUE; fbreak; }
     set_content_length(parser, PTR_TO(mark), LEN(mark, fpc));
     parser->on_element(parser->data, MONGREL_CONTENT_LENGTH, PTR_TO(mark), LEN(mark, fpc));
   }
   
-  action content_type {
+  action http_content_type {
     if(LEN(mark, fpc) > 1024) { parser->overflow_error = TRUE; fbreak; }
     parser->on_element(parser->data, MONGREL_CONTENT_TYPE, PTR_TO(mark), LEN(mark, fpc));
   }
@@ -143,12 +148,13 @@
 
   field_value = any* >start_value %write_value;
   
-  known_header = ("Content-Length:"i " "* (digit+ >mark %content_length) :> CRLF)
-               | ("Content-Type:"i " "* (any* >mark %content_type) :> CRLF)
-               ;
+  known_header = ( ("Accept:"i         " "* (any* >mark %http_accept))
+                 | ("Content-Length:"i " "* (digit+ >mark %http_content_length))
+                 | ("Content-Type:"i   " "* (any* >mark %http_content_type))
+                 ) :> CRLF;
   unknown_header = (field_name ":" " "* field_value :> CRLF) -- known_header;
   
-  Request = Request_Line (known_header | unknown_header )* ( CRLF @done );
+  Request = Request_Line (known_header | unknown_header)* ( CRLF @done );
 
 main := Request;
 
