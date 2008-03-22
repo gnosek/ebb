@@ -18,9 +18,9 @@
 /** machine **/
 %%{
   machine http_parser;
-
+  
   action mark {MARK(mark, fpc); }
-
+  
   action start_field { MARK(field_start, fpc); }
   action write_field { 
     parser->field_len = LEN(field_start, fpc);
@@ -29,27 +29,46 @@
       fbreak;
     }
   }
-
+  
   action start_value { MARK(mark, fpc); }
   action write_value {
-    if(LEN(mark, fpc) > 80 * 1024) {
-      parser->overflow_error = TRUE;
-      fbreak;
-    }
+    if(LEN(mark, fpc) > 80 * 1024) { parser->overflow_error = TRUE; fbreak; }
     if(parser->http_field != NULL) {
       parser->http_field(parser->data, PTR_TO(field_start), parser->field_len, PTR_TO(mark), LEN(mark, fpc));
     }
   }
   
   action content_length {
-    if(parser->content_length != NULL) {
-      parser->content_length(parser->data, PTR_TO(mark), LEN(mark, fpc));
+    if(LEN(mark, fpc) > 20) { parser->overflow_error = TRUE; fbreak; }
+    set_content_length(parser, PTR_TO(mark), LEN(mark, fpc));
+    parser->on_element(parser->data, MONGREL_CONTENT_LENGTH, PTR_TO(mark), LEN(mark, fpc));
+  }
+  
+  action content_type {
+    if(LEN(mark, fpc) > 1024) { parser->overflow_error = TRUE; fbreak; }
+    parser->on_element(parser->data, MONGREL_CONTENT_TYPE, PTR_TO(mark), LEN(mark, fpc));
+  }
+  
+  action fragment {
+    /* Don't know if this length is specified somewhere or not */
+    if(LEN(mark, fpc) > 1024) { parser->overflow_error = TRUE; fbreak; }
+    parser->on_element(parser->data, MONGREL_FRAGMENT, PTR_TO(mark), LEN(mark, fpc));
+  }
+  
+  action http_version {
+    parser->on_element(parser->data, MONGREL_HTTP_VERSION, PTR_TO(mark), LEN(mark, fpc));
+  }
+  
+  action request_path {
+    if(LEN(mark, fpc) > 1024) {
+      parser->overflow_error = TRUE;
+      fbreak;
     }
+    parser->on_element(parser->data, MONGREL_REQUEST_PATH, PTR_TO(mark), LEN(mark,fpc));
   }
   
   action request_method { 
-    if(parser->request_method != NULL) 
-      parser->request_method(parser->data, PTR_TO(mark), LEN(mark, fpc));
+    parser->on_element(parser->data, MONGREL_REQUEST_METHOD, PTR_TO(mark), LEN(mark, fpc));
   }
   
   action request_uri {
@@ -57,8 +76,7 @@
       parser->overflow_error = TRUE;
       fbreak;
     }
-    if(parser->request_uri != NULL)
-      parser->request_uri(parser->data, PTR_TO(mark), LEN(mark, fpc));
+    parser->on_element(parser->data, MONGREL_REQUEST_URI, PTR_TO(mark), LEN(mark, fpc));
   }
   
   action start_query {MARK(query_start, fpc); }
@@ -67,33 +85,9 @@
       parser->overflow_error = TRUE;
       fbreak;
     }
-    if(parser->query_string != NULL)
-      parser->query_string(parser->data, PTR_TO(query_start), LEN(query_start, fpc));
+    parser->on_element(parser->data, MONGREL_QUERY_STRING, PTR_TO(query_start), LEN(query_start, fpc));
   }
   
-  action http_version {	
-    if(parser->http_version != NULL)
-      parser->http_version(parser->data, PTR_TO(mark), LEN(mark, fpc));
-  }
-  
-  action request_path {
-    if(LEN(mark, fpc) > 1024) {
-      parser->overflow_error = TRUE;
-      fbreak;
-    }
-    if(parser->request_path != NULL)
-      parser->request_path(parser->data, PTR_TO(mark), LEN(mark,fpc));
-  }
-  
-  action fragment {
-    /* Don't know if this length is specified somewhere or not */
-    if(LEN(mark, fpc) > 1024) {
-      parser->overflow_error = TRUE;
-      fbreak;
-    }
-    if(parser->fragment != NULL)
-      parser->fragment(parser->data, PTR_TO(mark), LEN(mark, fpc));
-  }
   
   action done {
     if(parser->nread > 1024 * (80 + 32)) {
@@ -148,11 +142,13 @@
   field_name = ( token -- ":" )+ >start_field %write_field;
 
   field_value = any* >start_value %write_value;
-
-  message_header = field_name ":" " "* field_value :> CRLF;
-  content_length = "Content-Length:"i " "* (digit+ >mark %content_length) :> CRLF;
-
-  Request = Request_Line (content_length | message_header )* ( CRLF @done );
+  
+  known_header = ("Content-Length:"i " "* (digit+ >mark %content_length) :> CRLF)
+               | ("Content-Type:"i " "* (any* >mark %content_type) :> CRLF)
+               ;
+  unknown_header = (field_name ":" " "* field_value :> CRLF) -- known_header;
+  
+  Request = Request_Line (known_header | unknown_header )* ( CRLF @done );
 
 main := Request;
 
@@ -161,26 +157,28 @@ main := Request;
 /** Data **/
 %% write data;
 
+static void set_content_length(http_parser *parser, const char *at, int length)
+{
+  /* atoi_length - why isn't this in the statndard library? i hate c */
+  assert(parser->content_length == 0);
+  int i, mult;
+  for(mult=1, i=length-1; i>=0; i--, mult*=10)
+    parser->content_length += (at[i] - '0') * mult;
+}
+
 void http_parser_init(http_parser *parser)  {
   int cs = 0;
   %% write init;
   parser->cs = cs;
   parser->overflow_error = FALSE;
   parser->body_start = 0;
-  parser->content_len = 0;
+  parser->content_length = 0;
   parser->mark = 0;
   parser->nread = 0;
   parser->field_len = 0;
   parser->field_start = 0;
   parser->data = NULL;
   parser->http_field = NULL;
-  parser->request_method = NULL;
-  parser->request_uri = NULL;
-  parser->fragment = NULL;
-  parser->request_path = NULL;
-  parser->query_string = NULL;
-  parser->http_version = NULL;
-  parser->content_length = NULL;
 }
 
 

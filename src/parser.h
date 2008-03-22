@@ -12,14 +12,30 @@
 #include <stddef.h>
 #endif
 
+
+enum { MONGREL_REQUEST_METHOD
+     , MONGREL_REQUEST_URI
+     , MONGREL_FRAGMENT
+     , MONGREL_REQUEST_PATH
+     , MONGREL_QUERY_STRING
+     , MONGREL_HTTP_VERSION
+     , MONGREL_CONTENT_LENGTH
+     , MONGREL_CONTENT_TYPE
+     /* below - not used in the parser but often used by users of parser */
+     , MONGREL_SERVER_PORT 
+     };
+
 typedef void (*element_cb)(void *data, const char *at, size_t length);
 typedef void (*field_cb)(void *data, const char *field, size_t flen, const char *value, size_t vlen);
+typedef void (*new_element_cb)(void *data, int type, const char *at, size_t length);
+
+
 
 typedef struct http_parser { 
   int cs;
   int overflow_error;
   size_t body_start;
-  int content_len;
+  size_t content_length;
   size_t nread;
   size_t mark;
   size_t field_start;
@@ -29,14 +45,9 @@ typedef struct http_parser {
   void *data;
 
   field_cb http_field;
-  element_cb request_method;
-  element_cb request_uri;
-  element_cb fragment;
-  element_cb request_path;
-  element_cb query_string;
-  element_cb http_version;
+  
   element_cb header_done;
-  element_cb content_length;
+  new_element_cb on_element;
 } http_parser;
 
 void http_parser_init(http_parser *parser);

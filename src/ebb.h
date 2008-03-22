@@ -35,16 +35,7 @@ void ebb_client_write_body(ebb_client*, const char *data, int length);
 void ebb_client_begin_transmission( ebb_client *client);
 
 struct ebb_env_item {
-  enum { EBB_FIELD_VALUE_PAIR
-       , EBB_REQUEST_METHOD
-       , EBB_REQUEST_URI
-       , EBB_FRAGMENT
-       , EBB_REQUEST_PATH
-       , EBB_QUERY_STRING
-       , EBB_HTTP_VERSION
-       , EBB_SERVER_PORT
-       , EBB_CONTENT_LENGTH
-       } type;
+ int type;
  const char *field;
  int field_length;
  const char *value;
@@ -65,8 +56,6 @@ struct ebb_client {
   
   char upload_file_filename[200];
   FILE *upload_file;
-  
-  int content_length;
   
   ev_io write_watcher;
   GString *response_buffer;

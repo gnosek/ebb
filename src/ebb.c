@@ -37,7 +37,7 @@ void env_add(ebb_client *client, const char *field, int flen, const char *value,
     client->parser.overflow_error = TRUE;
     return;
   }
-  client->env[client->env_size].type = EBB_FIELD_VALUE_PAIR;
+  client->env[client->env_size].type = -1;
   client->env[client->env_size].field = field;
   client->env[client->env_size].field_length = flen;
   client->env[client->env_size].value = value;
@@ -70,57 +70,10 @@ void http_field_cb(void *data, const char *field, size_t flen, const char *value
 }
 
 
-void request_method_cb(void *data, const char *at, size_t length)
+void on_element(void *data, int type, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
-  env_add_const(client, EBB_REQUEST_METHOD, at, length);
-}
-
-
-void request_uri_cb(void *data, const char *at, size_t length)
-{
-  ebb_client *client = (ebb_client*)(data);
-  env_add_const(client, EBB_REQUEST_URI, at, length);
-}
-
-
-void fragment_cb(void *data, const char *at, size_t length)
-{
-  ebb_client *client = (ebb_client*)(data);
-  env_add_const(client, EBB_FRAGMENT, at, length);
-}
-
-
-void request_path_cb(void *data, const char *at, size_t length)
-{
-  ebb_client *client = (ebb_client*)(data);
-  env_add_const(client, EBB_REQUEST_PATH, at, length);
-}
-
-
-void query_string_cb(void *data, const char *at, size_t length)
-{
-  ebb_client *client = (ebb_client*)(data);
-  env_add_const(client, EBB_QUERY_STRING, at, length);
-}
-
-
-void http_version_cb(void *data, const char *at, size_t length)
-{
-  ebb_client *client = (ebb_client*)(data);
-  env_add_const(client, EBB_HTTP_VERSION, at, length);
-}
-
-
-void content_length_cb(void *data, const char *at, size_t length)
-{
-  ebb_client *client = (ebb_client*)(data);
-  env_add_const(client, EBB_CONTENT_LENGTH, at, length);
-  /* atoi_length - why isn't this in the statndard library? i hate c */
-  assert(client->content_length == 0);
-  int i, mult;
-  for(mult=1, i=length-1; i>=0; i--, mult*=10)
-    client->content_length += (at[i] - '0') * mult;
+  env_add_const(client, type, at, length);
 }
 
 
@@ -133,7 +86,7 @@ static void dispatch(ebb_client *client)
   
   /* Set the env variables */
   if(server->port) {
-    env_add_const(client, EBB_SERVER_PORT
+    env_add_const(client, MONGREL_SERVER_PORT
                         , server->port
                         , strlen(server->port)
                         );
@@ -157,7 +110,7 @@ static void on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
 }
 
 #define client_finished_parsing http_parser_is_finished(&client->parser)
-#define total_request_size (client->content_length + client->parser.nread)
+#define total_request_size (client->parser.content_length + client->parser.nread)
 
 static void* read_body_into_file(void *_client)
 {
@@ -167,7 +120,7 @@ static void* read_body_into_file(void *_client)
   
   assert(client->open);
   assert(client->server->open);
-  assert(client->content_length > 0);
+  assert(client->parser.content_length > 0);
   assert(client_finished_parsing);
   
   /* set blocking socket */
@@ -197,10 +150,10 @@ static void* read_body_into_file(void *_client)
   int bufsize = 5*1024;
   char buffer[bufsize];
   size_t received;
-  while(written < client->content_length) {
+  while(written < client->parser.content_length) {
     received = recv(client->fd
                    , buffer
-                   , min(client->content_length - written, bufsize)
+                   , min(client->parser.content_length - written, bufsize)
                    , 0
                    );
     if(received < 0) goto error;
@@ -362,19 +315,12 @@ static client_init(ebb_server *server, ebb_client *client)
   http_parser_init(&(client->parser));
   client->parser.data = client;
   client->parser.http_field     = http_field_cb;
-  client->parser.request_method = request_method_cb;
-  client->parser.request_uri    = request_uri_cb;
-  client->parser.fragment       = fragment_cb;
-  client->parser.request_path   = request_path_cb;
-  client->parser.query_string   = query_string_cb;
-  client->parser.http_version   = http_version_cb;
-  client->parser.content_length = content_length_cb;
+  client->parser.on_element     = on_element;
   
   /* OTHER */
   client->env_size = 0;
   client->read = client->nread_from_body = 0;
   client->response_buffer->len = 0; /* see note in ebb_client_close */
-  client->content_length = 0;
   if(client->request_buffer == NULL) {
     client->request_buffer = (char*)malloc(EBB_BUFFERSIZE);
   }
@@ -680,7 +626,7 @@ int ebb_client_read(ebb_client *client, char *buffer, int length)
   } else {
     char* request_body = client->request_buffer + client->parser.nread;
     
-    read = ramp(min(length, client->content_length - client->nread_from_body));
+    read = ramp(min(length, client->parser.content_length - client->nread_from_body));
     memcpy( buffer
           , request_body + client->nread_from_body
           , read
