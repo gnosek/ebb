@@ -282,6 +282,58 @@ error:
   ebb_client_close(client);
 }
 
+
+static void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents)
+{
+  ebb_client *client = (ebb_client*)(watcher->data);
+  ssize_t sent;
+  
+  if(client->status_written == FALSE || client->headers_written == FALSE) {
+    g_message("no status or headers - closing connection.");
+    goto error;
+  }
+  
+  if(EV_ERROR & revents) {
+    g_message("on_client_writable() got error event, closing peer");
+    goto error;
+  }
+  
+  //if(client->written != 0)
+  //  g_debug("total written: %d", (int)(client->written));
+  
+  sent = send( client->fd
+             , client->response_buffer->str + sizeof(gchar)*(client->written)
+             , client->response_buffer->len - client->written
+             , 0
+             );
+  if(sent < 0) {
+#ifdef DEBUG
+    g_message("Error writing: %s", strerror(errno));
+#endif
+    goto error;
+  } else if(sent == 0) {
+    /* is this the wrong thing to do? */
+    g_message("Sent zero bytes? Closing connection");
+    goto error;
+  }
+  client->written += sent;
+  
+  assert(client->written <= client->response_buffer->len);
+  //g_message("wrote %d bytes. total: %d", (int)sent, (int)(client->written));
+  
+  ev_timer_again(loop, &(client->timeout_watcher));
+  
+  if(client->written == client->response_buffer->len) {
+    ev_io_stop(loop, watcher);
+    if(client->body_written)
+      ebb_client_close(client);
+  }
+  return;
+error:
+  ebb_client_close(client);
+}
+
+
 static client_init(ebb_server *server, ebb_client *client)
 {
   assert(client->in_use == FALSE);
@@ -330,9 +382,15 @@ static client_init(ebb_server *server, ebb_client *client)
   client->status_written = FALSE;
   client->headers_written = FALSE;
   client->body_written = FALSE;
-  client->began_transmission = FALSE;
+  client->written = 0;
   
   /* SETUP READ AND TIMEOUT WATCHERS */
+  client->write_watcher.data = client;
+  ev_init (&client->write_watcher, on_client_writable);
+  ev_io_set (&client->write_watcher, client->fd, EV_WRITE | EV_ERROR);
+  /* Note, do not start write_watcher until there is something to be written.
+   * See ebb_client_write_body() */
+  
   client->read_watcher.data = client;
   ev_init(&client->read_watcher, on_client_readable);
   ev_io_set(&client->read_watcher, client->fd, EV_READ | EV_ERROR);
@@ -520,6 +578,7 @@ void ebb_client_release(ebb_client *client)
 {
   assert(client->in_use);
   client->in_use = FALSE;
+  client->body_written = TRUE;
   if(client->written == client->response_buffer->len)
     ebb_client_close(client);
 }
@@ -550,53 +609,6 @@ void ebb_client_close(ebb_client *client)
 }
 
 
-static void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents)
-{
-  ebb_client *client = (ebb_client*)(watcher->data);
-  ssize_t sent;
-  
-  assert(client->status_written);
-  assert(client->headers_written);
-  assert(client->began_transmission);
-  
-  if(EV_ERROR & revents) {
-    g_message("on_client_writable() got error event, closing peer");
-    ebb_client_close(client);
-    return;
-  }
-  
-  //if(client->written != 0)
-  //  g_debug("total written: %d", (int)(client->written));
-  
-  sent = send( client->fd
-             , client->response_buffer->str + sizeof(gchar)*(client->written)
-             , client->response_buffer->len - client->written
-             , 0
-             );
-  if(sent < 0) {
-#ifdef DEBUG
-    g_message("Error writing: %s", strerror(errno));
-#endif
-    ebb_client_close(client);
-    return;
-  } else if(sent == 0) {
-    g_message("Sent zero bytes? Closing connection");
-    ebb_client_close(client);
-  }
-  client->written += sent;
-  
-  assert(client->written <= client->response_buffer->len);
-  //g_message("wrote %d bytes. total: %d", (int)sent, (int)(client->written));
-  
-  ev_timer_again(loop, &(client->timeout_watcher));
-  
-  if(client->written == client->response_buffer->len) {
-    ev_io_stop(loop, watcher);
-    if(client->body_written)
-      ebb_client_close(client);
-  }
-}
-
 void ebb_client_write_status(ebb_client *client, int status, const char *human_status)
 {
   assert(client->in_use);
@@ -623,39 +635,29 @@ void ebb_client_write_header(ebb_client *client, const char *field, const char *
                         );
 }
 
-void ebb_client_write(ebb_client *client, const char *data, int length)
+
+void ebb_client_write_body(ebb_client *client, const char *data, int length)
 {
   assert(client->in_use);
   if(!client->open) return;
+  
+  if(client->headers_written == FALSE) {
+    g_string_append(client->response_buffer, "\r\n");
+  }
+  
   g_string_append_len(client->response_buffer, data, length);
-  if(client->began_transmission) {
-    /* restart the watcher if we're streaming */
+  
+  /* If the write_watcher isn't yet active, then start it. It could be that
+   * we're streaming and the watcher has been stopped. In that case we 
+   * start it again since we have more to write. */
+  if(ev_is_active(&client->write_watcher) == FALSE) {
+    /* assure the socket is still in non-blocking mode */
+    int flags = fcntl(client->fd, F_GETFL, 0);
+    if(0 > fcntl(client->fd, F_SETFL, flags | O_NONBLOCK))
+      perror("fcntl() setting non-block");
+    client->headers_written = TRUE;
     ev_io_start(client->server->loop, &client->write_watcher);
   }
-}
-
-
-void ebb_client_begin_transmission(ebb_client *client)
-{
-  assert(client->in_use);
-  if(!client->open) return;
-  assert(FALSE == ev_is_active(&client->write_watcher));
-  
-  /* assure the socket is still in non-blocking mode */
-  int flags = fcntl(client->fd, F_GETFL, 0);
-  if(0 > fcntl(client->fd, F_SETFL, flags | O_NONBLOCK)) {
-    perror("fcntl()");
-    ebb_client_close(client);
-    return;
-  }
-  
-  client->headers_written = TRUE;
-  client->began_transmission = TRUE;
-  client->written = 0;
-  client->write_watcher.data = client;
-  ev_init (&(client->write_watcher), on_client_writable);
-  ev_io_set (&(client->write_watcher), client->fd, EV_WRITE | EV_ERROR);
-  ev_io_start(client->server->loop, &client->write_watcher);
 }
 
 

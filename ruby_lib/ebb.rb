@@ -45,34 +45,27 @@ module Ebb
   end
   
   def self.process(app, client)
-    begin
-      status, headers, body = app.call(client.env)
-    rescue
-      raise if $DEBUG
-      status = 500
-      headers = {'Content-Type' => 'text/plain'}
-      body = "Internal Server Error\n"
-    end
+    status, headers, body = app.call(client.env)
     
+    # Write the status
     client.write_status(status)
     
+    # Add Content-Length to the headers.
     if headers.respond_to?(:[]=) and body.respond_to?(:length) and status != 304
       headers['Connection'] = 'close'
       headers['Content-Length'] = body.length.to_s
     end
     
+    # Write the headers
     headers.each { |field, value| client.write_header(field, value) }
-    client.write("\r\n")
     
+    # Write the body
     if body.kind_of?(String)
-      client.write(body)
-      client.body_written()
-      client.begin_transmission()
+      client.write_body(body)
     else
-      client.begin_transmission()
-      body.each { |p| client.write(p) }
-      client.body_written()
+      body.each { |p| client.write_body(p) }
     end
+    
   rescue => e
     log.puts "Ebb Error! #{e.class}  #{e.message}"
     log.puts e.backtrace.join("\n")
@@ -117,22 +110,14 @@ module Ebb
       FFI::client_write_status(self, s, HTTP_STATUS_CODES[s])
     end
     
-    def write(data)
-      FFI::client_write(self, data)
+    def write_body(data)
+      FFI::client_write_body(self, data)
     end
     
     def write_header(field, value)
       value.send(value.is_a?(String) ? :each_line : :each) do |v| 
         FFI::client_write_header(self, field, v.chomp)
       end
-    end
-    
-    def body_written
-      FFI::client_set_body_written(self, true)
-    end
-    
-    def begin_transmission
-      FFI::client_begin_transmission(self)
     end
     
     def release

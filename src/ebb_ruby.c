@@ -213,24 +213,14 @@ VALUE client_write_header(VALUE _, VALUE client, VALUE field, VALUE value)
   return Qnil;
 }
 
-VALUE client_write(VALUE _, VALUE client, VALUE string)
+VALUE client_write_body(VALUE _, VALUE client, VALUE string)
 {
   ebb_client *_client;
   Data_Get_Struct(client, ebb_client, _client);
-  ebb_client_write(_client, RSTRING_PTR(string), RSTRING_LEN(string));
+  ebb_client_write_body(_client, RSTRING_PTR(string), RSTRING_LEN(string));
   return Qnil;
 }
 
-
-VALUE client_begin_transmission(VALUE _, VALUE rb_client)
-{
-  ebb_client *client;
-  Data_Get_Struct(rb_client, ebb_client, client);
-  client->status_written = TRUE;
-  client->headers_written = TRUE;
-  ebb_client_begin_transmission(client);
-  return Qnil;
-}
 
 VALUE client_release(VALUE _, VALUE rb_client)
 {
@@ -240,14 +230,6 @@ VALUE client_release(VALUE _, VALUE rb_client)
   return Qnil;
 }
 
-
-VALUE client_set_body_written(VALUE _, VALUE rb_client, VALUE v)
-{
-  ebb_client *client;
-  Data_Get_Struct(rb_client, ebb_client, client);
-  client->body_written = RTEST(v);
-  return client->body_written ? Qtrue : Qfalse;
-}
 
 void Init_ebb_ext()
 {
@@ -280,9 +262,7 @@ void Init_ebb_ext()
   rb_define_singleton_method(mFFI, "client_read_input", client_read_input, 2);
   rb_define_singleton_method(mFFI, "client_write_status", client_write_status, 3);
   rb_define_singleton_method(mFFI, "client_write_header", client_write_header, 3);
-  rb_define_singleton_method(mFFI, "client_write", client_write, 2);
-  rb_define_singleton_method(mFFI, "client_begin_transmission", client_begin_transmission, 1);
-  rb_define_singleton_method(mFFI, "client_set_body_written", client_set_body_written, 2);
+  rb_define_singleton_method(mFFI, "client_write_body", client_write_body, 2);
   rb_define_singleton_method(mFFI, "client_env", client_env, 1);
   rb_define_singleton_method(mFFI, "client_release", client_release, 1);
   

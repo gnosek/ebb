@@ -15,7 +15,7 @@ typedef struct ebb_server ebb_server;
 typedef struct ebb_client ebb_client;
 #define EBB_VERSION "0.1.0"
 #define EBB_BUFFERSIZE (1024 * (80 + 33))
-#define EBB_MAX_CLIENTS 200
+#define EBB_MAX_CLIENTS 1024
 #define EBB_TIMEOUT 30.0
 #define EBB_MAX_ENV 500
 #define EBB_TCP_COMMON          \
@@ -30,7 +30,8 @@ void ebb_client_release(ebb_client*);
 int ebb_client_read(ebb_client *client, char *buffer, int length);
 void ebb_client_write_status(ebb_client*, int status, const char *human_status);
 void ebb_client_write_header(ebb_client*, const char *field, const char *value);
-void ebb_client_write(ebb_client*, const char *data, int length);
+void ebb_client_write_body(ebb_client*, const char *data, int length);
+
 void ebb_client_begin_transmission( ebb_client *client);
 
 struct ebb_env_item {
@@ -76,7 +77,6 @@ struct ebb_client {
   unsigned int status_written : 1;
   unsigned int headers_written : 1;
   unsigned int body_written : 1;
-  unsigned int began_transmission : 1;
   
   /* the ENV structure */
   int env_size;
