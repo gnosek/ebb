@@ -42,7 +42,10 @@
     if(LEN(mark, fpc) > 1024) { parser->overflow_error = TRUE; fbreak; }
     parser->on_element(parser->data, MONGREL_ACCEPT, PTR_TO(mark), LEN(mark, fpc));
   }
-  
+  action http_connection {
+    if(LEN(mark, fpc) > 1024) { parser->overflow_error = TRUE; fbreak; }
+    parser->on_element(parser->data, MONGREL_CONNECTION, PTR_TO(mark), LEN(mark, fpc));
+  }
   action http_content_length {
     if(LEN(mark, fpc) > 20) { parser->overflow_error = TRUE; fbreak; }
     set_content_length(parser, PTR_TO(mark), LEN(mark, fpc));
@@ -149,6 +152,7 @@
   field_value = any* >start_value %write_value;
   
   known_header = ( ("Accept:"i         " "* (any* >mark %http_accept))
+                 | ("Connection:"i     " "* (any* >mark %http_connection))
                  | ("Content-Length:"i " "* (digit+ >mark %http_content_length))
                  | ("Content-Type:"i   " "* (any* >mark %http_content_type))
                  ) :> CRLF;

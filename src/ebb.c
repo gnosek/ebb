@@ -80,17 +80,8 @@ void on_element(void *data, int type, const char *at, size_t length)
 static void dispatch(ebb_client *client)
 {
   ebb_server *server = client->server;
-  
   if(client->open == FALSE)
     return;
-  
-  /* Set the env variables */
-  if(server->port) {
-    env_add_const(client, MONGREL_SERVER_PORT
-                        , server->port
-                        , strlen(server->port)
-                        );
-  }
   client->in_use = TRUE;
   server->request_cb(client, server->request_cb_data);
 }
@@ -287,35 +278,21 @@ error:
 }
 
 
-static client_init(ebb_server *server, ebb_client *client)
+static client_init(ebb_client *client, int fd)
 {
   assert(client->in_use == FALSE);
-#ifdef DEBUG
-  /* does ragel fuck up if request buffer isn't null? */
-  for(i=0; i< EBB_BUFFERSIZE; i++)
-    client->request_buffer[i] = 'A';
-#endif
   
   client->open = TRUE;
-  client->server = server;
-  
-  /* DO SOCKET STUFF */
-  socklen_t len;
-  client->fd = accept(server->fd, (struct sockaddr*)&(server->sockaddr), &len);
-  if(client->fd < 0) {
-    perror("accept()");
-    client->open = FALSE;
-    return;
-  }
+  client->fd = fd;
   
   int flags = fcntl(client->fd, F_GETFL, 0);
   assert(0 <= fcntl(client->fd, F_SETFL, flags | O_NONBLOCK));
   
   /* INITIALIZE http_parser */
-  http_parser_init(&(client->parser));
+  http_parser_init(&client->parser);
   client->parser.data = client;
-  client->parser.http_field     = http_field_cb;
-  client->parser.on_element     = on_element;
+  client->parser.http_field = http_field_cb;
+  client->parser.on_element = on_element;
   
   /* OTHER */
   client->env_size = 0;
@@ -340,12 +317,19 @@ static client_init(ebb_server *server, ebb_client *client)
   client->read_watcher.data = client;
   ev_init(&client->read_watcher, on_client_readable);
   ev_io_set(&client->read_watcher, client->fd, EV_READ | EV_ERROR);
-  ev_io_start(server->loop, &client->read_watcher);
+  ev_io_start(client->server->loop, &client->read_watcher);
   
   client->timeout_watcher.data = client;  
   ev_timer_init(&client->timeout_watcher, on_timeout, EBB_TIMEOUT, EBB_TIMEOUT);
-  ev_timer_start(server->loop, &client->timeout_watcher);
+  ev_timer_start(client->server->loop, &client->timeout_watcher);
 }
+
+
+static client_reinit(ebb_client *client)
+{
+  client_init(client, client->fd);
+}
+
 
 static void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
 {
@@ -384,7 +368,15 @@ static void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
   g_debug("%d open connections", count);
 #endif
   
-  client_init(server, client);
+  /* DO SOCKET STUFF */
+  socklen_t len;
+  int client_fd = accept(server->fd, (struct sockaddr*)&(server->sockaddr), &len);
+  if(client_fd < 0) {
+    perror("accept()");
+    return;
+  }
+  
+  client_init(client, client_fd);
 }
 
 
@@ -407,6 +399,7 @@ void ebb_server_init( ebb_server *server
     server->clients[i].response_buffer = g_string_new("");
     server->clients[i].open = FALSE;
     server->clients[i].in_use = FALSE;
+    server->clients[i].server = server;
   }
   
   server->request_cb = request_cb;

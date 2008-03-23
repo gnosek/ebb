@@ -11,20 +11,22 @@
 #include <ev.h>
 
 static VALUE cClient;
-static VALUE global_http_prefix;
-static VALUE global_request_method;
-static VALUE global_request_uri;
 static VALUE global_fragment;
-static VALUE global_request_path;
-static VALUE global_query_string;
-static VALUE global_http_version;
-static VALUE global_request_body;
-static VALUE global_server_port;
 static VALUE global_path_info;
+static VALUE global_query_string;
+static VALUE global_request_body;
+static VALUE global_request_method;
+static VALUE global_request_path;
+static VALUE global_request_uri;
+static VALUE global_server_port;
+static VALUE global_http_accept;
+static VALUE global_http_connection;
 static VALUE global_http_content_length;
 static VALUE global_http_content_type;
 static VALUE global_http_content_type;
-static VALUE global_http_accept;
+static VALUE global_http_prefix;
+static VALUE global_http_version;
+
 
 /* You don't want to run more than one server per Ruby VM. Really
  * I'm making this explicit by not defining a Ebb::Server class but instead
@@ -134,16 +136,16 @@ VALUE env_field(struct ebb_env_item *item)
     return f;
   }
   switch(item->type) {
-    case MONGREL_REQUEST_METHOD:  return global_request_method;
-    case MONGREL_REQUEST_URI:     return global_request_uri;
-    case MONGREL_FRAGMENT:        return global_fragment;
-    case MONGREL_REQUEST_PATH:    return global_request_path;
-    case MONGREL_QUERY_STRING:    return global_query_string;
-    case MONGREL_HTTP_VERSION:    return global_http_version;
-    case MONGREL_SERVER_PORT:     return global_server_port;
     case MONGREL_ACCEPT:          return global_http_accept;
+    case MONGREL_CONNECTION:      return global_http_connection;
     case MONGREL_CONTENT_LENGTH:  return global_http_content_length;
     case MONGREL_CONTENT_TYPE:    return global_http_content_type;
+    case MONGREL_FRAGMENT:        return global_fragment;
+    case MONGREL_HTTP_VERSION:    return global_http_version;
+    case MONGREL_QUERY_STRING:    return global_query_string;
+    case MONGREL_REQUEST_METHOD:  return global_request_method;
+    case MONGREL_REQUEST_PATH:    return global_request_path;
+    case MONGREL_REQUEST_URI:     return global_request_uri;
   }
   fprintf(stderr, "Unknown environ type: %d", item->type);
   assert(FALSE);
@@ -163,19 +165,21 @@ VALUE env_value(struct ebb_env_item *item)
 VALUE client_env(VALUE _, VALUE rb_client)
 {
   ebb_client *client;
-  VALUE field, value, hash = rb_hash_new();
+  VALUE field, value, env = rb_hash_new();
   int i;
   
   Data_Get_Struct(rb_client, ebb_client, client);
   for(i=0; i < client->env_size; i++) {
     field = env_field(&client->env[i]);
     value = env_value(&client->env[i]);
-    rb_hash_aset(hash, field, value);
-    //printf("(%s, %s)\n", StringValuePtr(field), StringValuePtr(value));
+    rb_hash_aset(env, field, value);
   }
-  //printf("\n\n");
-  rb_hash_aset(hash, global_path_info, rb_hash_aref(hash, global_request_path));
-  return hash;
+  
+  if(client->server->port)
+    rb_hash_aset(env, global_server_port, rb_str_new2(client->server->port));
+  
+  rb_hash_aset(env, global_path_info, rb_hash_aref(env, global_request_path));
+  return env;
 }
 
 
@@ -245,19 +249,20 @@ void Init_ebb_ext()
   
   /** Defines global strings in the init method. */
 #define DEF_GLOBAL(N, val) global_##N = rb_obj_freeze(rb_str_new2(val)); rb_global_variable(&global_##N)
-  DEF_GLOBAL(http_prefix, "HTTP_");
-  DEF_GLOBAL(request_method, "REQUEST_METHOD");  
-  DEF_GLOBAL(request_uri, "REQUEST_URI");
   DEF_GLOBAL(fragment, "FRAGMENT");
-  DEF_GLOBAL(request_path, "REQUEST_PATH");
-  DEF_GLOBAL(query_string, "QUERY_STRING");
-  DEF_GLOBAL(http_version, "HTTP_VERSION");
-  DEF_GLOBAL(request_body, "REQUEST_BODY");
-  DEF_GLOBAL(server_port, "SERVER_PORT");
   DEF_GLOBAL(path_info, "PATH_INFO");
+  DEF_GLOBAL(query_string, "QUERY_STRING");
+  DEF_GLOBAL(request_body, "REQUEST_BODY");
+  DEF_GLOBAL(request_method, "REQUEST_METHOD");  
+  DEF_GLOBAL(request_path, "REQUEST_PATH");
+  DEF_GLOBAL(request_uri, "REQUEST_URI");
+  DEF_GLOBAL(server_port, "SERVER_PORT");
+  DEF_GLOBAL(http_accept, "HTTP_ACCEPT");
+  DEF_GLOBAL(http_connection, "HTTP_CONNECTION");
   DEF_GLOBAL(http_content_length, "HTTP_CONTENT_LENGTH");
   DEF_GLOBAL(http_content_type, "HTTP_CONTENT_TYPE");
-  DEF_GLOBAL(http_accept, "HTTP_ACCEPT");
+  DEF_GLOBAL(http_prefix, "HTTP_");
+  DEF_GLOBAL(http_version, "HTTP_VERSION");
   
   rb_define_singleton_method(mFFI, "server_process_connections", server_process_connections, 0);
   rb_define_singleton_method(mFFI, "server_listen_on_port", server_listen_on_port, 1);

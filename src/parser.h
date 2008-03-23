@@ -13,24 +13,21 @@
 #endif
 
 
-enum { MONGREL_REQUEST_METHOD
-     , MONGREL_REQUEST_URI
-     , MONGREL_FRAGMENT
-     , MONGREL_REQUEST_PATH
-     , MONGREL_QUERY_STRING
-     , MONGREL_HTTP_VERSION
+enum { MONGREL_ACCEPT
+     , MONGREL_CONNECTION
      , MONGREL_CONTENT_LENGTH
      , MONGREL_CONTENT_TYPE
-     , MONGREL_ACCEPT
-     /* below - not used in the parser but often used by users of parser */
-     , MONGREL_SERVER_PORT 
+     , MONGREL_FRAGMENT
+     , MONGREL_HTTP_VERSION
+     , MONGREL_QUERY_STRING
+     , MONGREL_REQUEST_PATH
+     , MONGREL_REQUEST_METHOD
+     , MONGREL_REQUEST_URI
      };
 
 typedef void (*element_cb)(void *data, const char *at, size_t length);
 typedef void (*field_cb)(void *data, const char *field, size_t flen, const char *value, size_t vlen);
 typedef void (*new_element_cb)(void *data, int type, const char *at, size_t length);
-
-
 
 typedef struct http_parser { 
   int cs;
