@@ -52,7 +52,7 @@ struct ebb_client {
   ev_io read_watcher;
   size_t read, nread_from_body;
   
-  char upload_filename[200];
+  char *upload_filename;
   FILE *upload_file;
   
   ev_io write_watcher;
