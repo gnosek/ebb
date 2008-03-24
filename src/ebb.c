@@ -120,8 +120,8 @@ static void on_timeout(struct ev_loop *loop, ev_timer *watcher, int revents)
 static void* read_body_into_file(void *_client)
 {
   ebb_client *client = (ebb_client*)_client;
-  static unsigned int id;
   FILE *tmpfile;
+  char *filename = "/tmp/.ebb_upload.XXXXXX";
   
   assert(client->open);
   assert(client->server->open);
@@ -133,9 +133,18 @@ static void* read_body_into_file(void *_client)
   int ret = fcntl(client->fd, F_SETFL, flags & ~O_NONBLOCK);
   assert(0 <= ret);
   
-  sprintf(client->upload_filename, "/tmp/ebb_upload_%010d", id++);
-  tmpfile = fopen(client->upload_filename, "w+");
-  if(tmpfile == NULL) g_message("Cannot open tmpfile %s", client->upload_filename);
+  if(0 > mkstemp(filename)) {
+    perror("mkstemp()");
+    ebb_client_close(client);
+    return NULL;
+  }
+  client->upload_filename = strdup(filename);
+  tmpfile = fopen(filename, "w+");
+  if(tmpfile == NULL) {
+    perror("opening tempfile for uplaod");
+    ebb_client_close(client);
+    return NULL;
+  }
   client->upload_file = tmpfile;
   
   size_t body_head_length = client->read - client->parser.nread;
@@ -343,6 +352,7 @@ static void client_init(ebb_client *client)
    * because the backend is going to keep sending such long requests.
    */
   client->response_buffer->len = 0;
+  client->upload_filename = NULL;
   
   /* SETUP READ AND TIMEOUT WATCHERS */
   client->write_watcher.data = client;
@@ -549,9 +559,11 @@ void ebb_client_close(ebb_client *client)
     ev_io_stop(client->server->loop, &client->write_watcher);
     ev_timer_stop(client->server->loop, &client->timeout_watcher);
     
-    if(client->upload_file) {
+    if(client->upload_filename) {
       fclose(client->upload_file);
       unlink(client->upload_filename);
+      client->upload_file = NULL;
+      client->upload_filename = NULL;
     }
     
     close(client->fd);
