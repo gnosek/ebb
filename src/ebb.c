@@ -475,6 +475,23 @@ void ebb_server_unlisten(ebb_server *server)
   }
 }
 
+int ebb_server_listen_on_fd(ebb_server *server, const int sfd)
+{
+  set_nonblock(sfd);
+
+  server->fd = sfd;
+  server->port = NULL;
+  assert(server->open == FALSE);
+  server->open = TRUE;
+
+  server->request_watcher.data = server;
+  ev_init (&server->request_watcher, on_request);
+  ev_io_set (&server->request_watcher, server->fd, EV_READ | EV_ERROR);
+  ev_io_start (server->loop, &server->request_watcher);
+
+  return server->fd;
+}
+
 int ebb_server_listen_on_port(ebb_server *server, const int port)
 {
   int sfd = -1;
@@ -513,18 +530,13 @@ int ebb_server_listen_on_port(ebb_server *server, const int port)
     perror("listen()");
     goto error;
   }
-  server->fd = sfd;
-  server->port = malloc(sizeof(char)*8); /* for easy access to the port */
-  sprintf(server->port, "%d", port);
-  assert(server->open == FALSE);
-  server->open = TRUE;
-  
-  server->request_watcher.data = server;
-  ev_init (&server->request_watcher, on_request);
-  ev_io_set (&server->request_watcher, server->fd, EV_READ | EV_ERROR);
-  ev_io_start (server->loop, &server->request_watcher);
-  
-  return server->fd;
+
+  int ret = ebb_server_listen_on_fd(server, sfd);
+  if (ret >= 0) {
+    server->port = malloc(sizeof(char)*8); /* for easy access to the port */
+    sprintf(server->port, "%d", port);
+  }
+  return ret;
 error:
   if(sfd > 0) close(sfd);
   return -1;

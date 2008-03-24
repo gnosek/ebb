@@ -73,6 +73,13 @@ void request_cb(ebb_client *client, void *data)
   attach_idle_watcher();
 }
 
+VALUE server_listen_on_fd(VALUE _, VALUE sfd)
+{
+  if(ebb_server_listen_on_fd(server, FIX2INT(sfd)) < 0)
+    rb_sys_fail("Problem listening on FD");
+  return Qnil;
+}
+
 VALUE server_listen_on_port(VALUE _, VALUE port)
 {
   if(ebb_server_listen_on_port(server, FIX2INT(port)) < 0)
@@ -264,6 +271,7 @@ void Init_ebb_ext()
   DEF_GLOBAL(http_version, "HTTP_VERSION");
   
   rb_define_singleton_method(mFFI, "server_process_connections", server_process_connections, 0);
+  rb_define_singleton_method(mFFI, "server_listen_on_fd", server_listen_on_fd, 1);
   rb_define_singleton_method(mFFI, "server_listen_on_port", server_listen_on_port, 1);
   rb_define_singleton_method(mFFI, "server_unlisten", server_unlisten, 0);
   rb_define_singleton_method(mFFI, "server_open?", server_open, 0);

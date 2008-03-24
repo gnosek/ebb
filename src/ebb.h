@@ -81,6 +81,7 @@ void ebb_server_init( ebb_server *server
                     , ebb_request_cb request_cb
                     , void *request_cb_data
                     );
+int ebb_server_listen_on_fd(ebb_server*, const int sfd);
 int ebb_server_listen_on_port(ebb_server*, const int port);
 int ebb_server_listen_on_socket(ebb_server*, const char *socketpath);
 void ebb_server_unlisten(ebb_server*);

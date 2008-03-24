@@ -16,8 +16,12 @@ module Ebb
     end
     
     Client::BASE_ENV['rack.multithread'] = threaded_processing
-    
-    FFI::server_listen_on_port(port)
+
+    if options.has_key?(:fileno)
+      FFI::server_listen_on_fd(options[:fileno].to_i)
+    else
+      FFI::server_listen_on_port(port)
+    end
     @running = true
     trap('INT')  { stop_server }
     

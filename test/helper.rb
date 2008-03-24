@@ -84,3 +84,17 @@ class ServerTest < Test::Unit::TestCase
     assert true
   end
 end
+
+class ServerTestFD < ServerTest
+  def setup
+    @tcp_server = TCPServer.new('0.0.0.0', TEST_PORT);
+    Thread.new { Ebb.start_server(HelperApp.new, :fileno => @tcp_server.fileno) }
+    sleep 0.1 until Ebb.running?
+  end
+
+  def teardown
+    super
+    @tcp_server = nil
+  end
+end
+
