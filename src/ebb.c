@@ -81,16 +81,6 @@ void http_field_cb(void *data, const char *field, size_t flen, const char *value
 void on_element(void *data, int type, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
-  switch(type) {
-  case MONGREL_HTTP_VERSION:
-    /* "HTTP/1.1" by default is keep-alive true, otherwise not*/
-    /* note that the version will always come first */
-    client->keep_alive = (strncmp(at+5, "1.1", 3) == 0);
-    break;
-  case MONGREL_CONNECTION:
-    client->keep_alive = (strncmp(at, "close", 5) != 0);
-    break;
-  }
   env_add_const(client, type, at, length);
 }
 
@@ -343,7 +333,7 @@ static void client_init(ebb_client *client)
     /* Only allocate the request_buffer once */
     client->request_buffer = (char*)malloc(EBB_BUFFERSIZE);
   }
-  client->keep_alive = TRUE;
+  client->keep_alive = FALSE;
   client->status_written = client->headers_written = client->body_written = FALSE;
   client->written = 0;
   /* here we do not free the already allocated GString client->response_buffer
@@ -581,12 +571,17 @@ void ebb_client_write_status(ebb_client *client, int status, const char *human_s
   client->status_written = TRUE;
 }
 
+
 void ebb_client_write_header(ebb_client *client, const char *field, const char *value)
 {
   assert(client->in_use);
   if(!client->open) return;
   assert(client->status_written == TRUE);
   assert(client->headers_written == FALSE);
+  
+  if(strcmp(field, "Connection") == 0 && strcmp(value, "Keep-Alive") == 0) {
+    client->keep_alive = TRUE;
+  }
   g_string_append_printf( client->response_buffer
                         , "%s: %s\r\n"
                         , field

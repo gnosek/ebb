@@ -68,12 +68,17 @@ class SimpleApp
       body = "Undefined url"
     end
     
-    [status, {'Content-Type' => 'text/plain'}, body + "\r\n\r\n"]
+    body += "\r\n"
+    headers = {'Content-Type' => 'text/plain', 'Content-Length' => body.length.to_s }
+    [status, headers, body]
   end
 end
 
 
 if $0 == __FILE__
+  require 'rubygems'
+  require 'ruby-debug'
+  Debugger.start
   require DIR + '/../ruby_lib/ebb'
   server = Ebb::start_server(SimpleApp.new, :port => 4001)
 end

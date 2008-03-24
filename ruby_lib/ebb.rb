@@ -52,10 +52,22 @@ module Ebb
     client.write_status(status)
     
     # Add Content-Length to the headers.
-    if headers.respond_to?(:[]=) and body.respond_to?(:length) and status != 304
+    if headers['Content-Length'].nil? and
+       headers.respond_to?(:[]=) and 
+       body.respond_to?(:length) and 
+       status != 304
+    then
       headers['Content-Length'] = body.length.to_s
     end
-    headers['Connection'] = client.keep_alive? ? 'Keep-Alive' : 'close'
+    
+    # Decide if we should keep the connection alive or not
+    if headers['Connection'].nil?
+      if headers['Content-Length'] and client.should_keep_alive?
+        headers['Connection'] = 'Keep-Alive'
+      else
+        headers['Connection'] = 'close'
+      end
+    end
     
     # Write the headers
     headers.each { |field, value| client.write_header(field, value) }
@@ -127,8 +139,17 @@ module Ebb
       FFI::client_release(self)
     end
     
-    def keep_alive?
-      FFI::client_keep_alive?(self)
+    def set_keep_alive
+      FFI::client_set_keep_alive(self)
+    end
+    
+    def should_keep_alive?
+      if env['HTTP_VERSION'] == 'HTTP/1.0' 
+        return true if env['HTTP_CONNECTION'] =~ /Keep-Alive/i
+      else
+        return true unless env['HTTP_CONNECTION'] =~ /close/i
+      end
+      false
     end
   end
   

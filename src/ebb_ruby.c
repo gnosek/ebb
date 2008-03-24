@@ -239,13 +239,6 @@ VALUE client_release(VALUE _, VALUE rb_client)
   return Qnil;
 }
 
-VALUE client_keep_alive_p(VALUE _, VALUE rb_client)
-{
-  ebb_client *client;
-  Data_Get_Struct(rb_client, ebb_client, client);
-  return client->keep_alive ? Qtrue : Qfalse;
-}
-
 void Init_ebb_ext()
 {
   VALUE mEbb = rb_define_module("Ebb");
@@ -280,7 +273,6 @@ void Init_ebb_ext()
   rb_define_singleton_method(mFFI, "client_write_status", client_write_status, 3);
   rb_define_singleton_method(mFFI, "client_write_header", client_write_header, 3);
   rb_define_singleton_method(mFFI, "client_write_body", client_write_body, 2);
-  rb_define_singleton_method(mFFI, "client_keep_alive?", client_keep_alive_p, 1);
   rb_define_singleton_method(mFFI, "client_env", client_env, 1);
   rb_define_singleton_method(mFFI, "client_release", client_release, 1);
   
