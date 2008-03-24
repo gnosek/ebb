@@ -30,6 +30,14 @@
 #define ramp(a) (a > 0 ? a : 0)
 
 static int server_socket_unix(const char *path, int access_mask);
+static void client_init(ebb_client *client);
+
+static void set_nonblock(int fd)
+{
+  int flags = fcntl(fd, F_GETFL, 0);
+  assert(0 <= fcntl(fd, F_SETFL, flags | O_NONBLOCK) && "Setting socket non-block failed!");
+}
+
 
 void env_add(ebb_client *client, const char *field, int flen, const char *value, int vlen)
 {
@@ -73,6 +81,16 @@ void http_field_cb(void *data, const char *field, size_t flen, const char *value
 void on_element(void *data, int type, const char *at, size_t length)
 {
   ebb_client *client = (ebb_client*)(data);
+  switch(type) {
+  case MONGREL_HTTP_VERSION:
+    /* "HTTP/1.1" by default is keep-alive true, otherwise not*/
+    /* note that the version will always come first */
+    client->keep_alive = (strncmp(at+5, "1.1", 3) == 0);
+    break;
+  case MONGREL_CONNECTION:
+    client->keep_alive = (strncmp(at, "close", 5) != 0);
+    break;
+  }
   env_add_const(client, type, at, length);
 }
 
@@ -83,6 +101,12 @@ static void dispatch(ebb_client *client)
   if(client->open == FALSE)
     return;
   client->in_use = TRUE;
+  
+  /* decide if to use keep-alive or not */
+  
+
+  
+  
   server->request_cb(client, server->request_cb_data);
 }
 
@@ -118,9 +142,9 @@ static void* read_body_into_file(void *_client)
   int flags = fcntl(client->fd, F_GETFL, 0);
   assert(0 <= fcntl(client->fd, F_SETFL, flags & ~O_NONBLOCK));
   
-  sprintf(client->upload_file_filename, "/tmp/ebb_upload_%010d", id++);
-  tmpfile = fopen(client->upload_file_filename, "w+");
-  if(tmpfile == NULL) g_message("Cannot open tmpfile %s", client->upload_file_filename);
+  sprintf(client->upload_filename, "/tmp/ebb_upload_%010d", id++);
+  tmpfile = fopen(client->upload_filename, "w+");
+  if(tmpfile == NULL) g_message("Cannot open tmpfile %s", client->upload_filename);
   client->upload_file = tmpfile;
   
   size_t body_head_length = client->read - client->parser.nread;
@@ -164,7 +188,7 @@ static void* read_body_into_file(void *_client)
     written += received;
   }
   rewind(tmpfile);
-  // g_debug("%d bytes written to file %s", written, client->upload_file_filename);
+  // g_debug("%d bytes written to file %s", written, client->upload_filename);
   dispatch(client);
   return NULL;
 error:
@@ -188,7 +212,7 @@ static void on_client_readable(struct ev_loop *loop, ev_io *watcher, int revents
                      , EBB_BUFFERSIZE - client->read
                      , 0
                      );
-  if(read < 0) goto error; 
+  if(read < 0) goto error;
   if(read == 0) goto error; /* XXX is this the right action to take for read==0 ? */
   client->read += read;
   ev_timer_again(loop, &client->timeout_watcher);
@@ -222,7 +246,9 @@ static void on_client_readable(struct ev_loop *loop, ev_io *watcher, int revents
   }
   return;
 error:
+#ifdef DEBUG
   if(read < 0) g_message("Error recving data: %s", strerror(errno));
+#endif
   ebb_client_close(client);
 }
 
@@ -265,12 +291,17 @@ static void on_client_writable(struct ev_loop *loop, ev_io *watcher, int revents
   assert(client->written <= client->response_buffer->len);
   //g_message("wrote %d bytes. total: %d", (int)sent, (int)(client->written));
   
-  ev_timer_again(loop, &(client->timeout_watcher));
+  ev_timer_again(loop, &client->timeout_watcher);
   
   if(client->written == client->response_buffer->len) {
+    /* stop the write watcher. to be restarted by the next call to ebb_client_write_body
+     * or if client->body_written is set (by using ebb_client_release) then
+     * we close the connection
+     */
     ev_io_stop(loop, watcher);
-    if(client->body_written)
-      ebb_client_close(client);
+    if(client->body_written) {
+      client->keep_alive ? client_init(client) : ebb_client_close(client);
+    }
   }
   return;
 error:
@@ -278,15 +309,26 @@ error:
 }
 
 
-static client_init(ebb_client *client, int fd)
+static void client_init(ebb_client *client)
 {
   assert(client->in_use == FALSE);
   
-  client->open = TRUE;
-  client->fd = fd;
+  /* If the client is already open, reuse the fd, just reset all the parameters
+   * this would happen in the case of a keep_alive request
+   */
+  if(!client->open) {
+    /* DO SOCKET STUFF */
+    socklen_t len;
+    int fd = accept(client->server->fd, (struct sockaddr*)&(client->server->sockaddr), &len);
+    if(fd < 0) {
+      perror("accept()");
+      return;
+    }
+    client->open = TRUE;
+    client->fd = fd;
+  }
   
-  int flags = fcntl(client->fd, F_GETFL, 0);
-  assert(0 <= fcntl(client->fd, F_SETFL, flags | O_NONBLOCK));
+  set_nonblock(client->fd);
   
   /* INITIALIZE http_parser */
   http_parser_init(&client->parser);
@@ -297,15 +339,18 @@ static client_init(ebb_client *client, int fd)
   /* OTHER */
   client->env_size = 0;
   client->read = client->nread_from_body = 0;
-  client->response_buffer->len = 0; /* see note in ebb_client_close */
   if(client->request_buffer == NULL) {
+    /* Only allocate the request_buffer once */
     client->request_buffer = (char*)malloc(EBB_BUFFERSIZE);
   }
-  
-  client->status_written = FALSE;
-  client->headers_written = FALSE;
-  client->body_written = FALSE;
+  client->keep_alive = TRUE;
+  client->status_written = client->headers_written = client->body_written = FALSE;
   client->written = 0;
+  /* here we do not free the already allocated GString client->response_buffer
+   * that we're holding the response in. we reuse it again - presumably 
+   * because the backend is going to keep sending such long requests.
+   */
+  client->response_buffer->len = 0;
   
   /* SETUP READ AND TIMEOUT WATCHERS */
   client->write_watcher.data = client;
@@ -322,12 +367,6 @@ static client_init(ebb_client *client, int fd)
   client->timeout_watcher.data = client;  
   ev_timer_init(&client->timeout_watcher, on_timeout, EBB_TIMEOUT, EBB_TIMEOUT);
   ev_timer_start(client->server->loop, &client->timeout_watcher);
-}
-
-
-static client_reinit(ebb_client *client)
-{
-  client_init(client, client->fd);
 }
 
 
@@ -368,15 +407,7 @@ static void on_request(struct ev_loop *loop, ev_io *watcher, int revents)
   g_debug("%d open connections", count);
 #endif
   
-  /* DO SOCKET STUFF */
-  socklen_t len;
-  int client_fd = accept(server->fd, (struct sockaddr*)&(server->sockaddr), &len);
-  if(client_fd < 0) {
-    perror("accept()");
-    return;
-  }
-  
-  client_init(client, client_fd);
+  client_init(client);
 }
 
 
@@ -454,11 +485,7 @@ int ebb_server_listen_on_port(ebb_server *server, const int port)
     goto error;
   }
   
-  flags = fcntl(sfd, F_GETFL, 0);
-  if(fcntl(sfd, F_SETFL, flags | O_NONBLOCK) < 0) {
-    perror("setting O_NONBLOCK");
-    goto error;
-  }
+  set_nonblock(sfd);
   
   flags = 1;
   setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (void *)&flags, sizeof(flags));
@@ -532,15 +559,8 @@ void ebb_client_close(ebb_client *client)
     
     if(client->upload_file) {
       fclose(client->upload_file);
-      unlink(client->upload_file_filename);
+      unlink(client->upload_filename);
     }
-    
-    /* here we do not free the already allocated GString client->response_buffer
-     * that we're holding the response in. we reuse it again - 
-     * presumably because the backend is going to keep sending such long
-     * requests.
-     */
-    client->response_buffer->len = 0;
     
     close(client->fd);
     client->open = FALSE;
@@ -582,6 +602,7 @@ void ebb_client_write_body(ebb_client *client, const char *data, int length)
   
   if(client->headers_written == FALSE) {
     g_string_append(client->response_buffer, "\r\n");
+    client->headers_written = TRUE;
   }
   
   g_string_append_len(client->response_buffer, data, length);
@@ -590,11 +611,7 @@ void ebb_client_write_body(ebb_client *client, const char *data, int length)
    * we're streaming and the watcher has been stopped. In that case we 
    * start it again since we have more to write. */
   if(ev_is_active(&client->write_watcher) == FALSE) {
-    /* assure the socket is still in non-blocking mode */
-    int flags = fcntl(client->fd, F_GETFL, 0);
-    if(0 > fcntl(client->fd, F_SETFL, flags | O_NONBLOCK))
-      perror("fcntl() setting non-block");
-    client->headers_written = TRUE;
+    set_nonblock(client->fd);
     ev_io_start(client->server->loop, &client->write_watcher);
   }
 }

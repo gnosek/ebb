@@ -45,6 +45,7 @@ module Ebb
   end
   
   def self.process(app, client)
+    #p client.env
     status, headers, body = app.call(client.env)
     
     # Write the status
@@ -52,9 +53,9 @@ module Ebb
     
     # Add Content-Length to the headers.
     if headers.respond_to?(:[]=) and body.respond_to?(:length) and status != 304
-      headers['Connection'] = 'close'
       headers['Content-Length'] = body.length.to_s
     end
+    headers['Connection'] = client.keep_alive? ? 'Keep-Alive' : 'close'
     
     # Write the headers
     headers.each { |field, value| client.write_header(field, value) }
@@ -124,6 +125,10 @@ module Ebb
     
     def release
       FFI::client_release(self)
+    end
+    
+    def keep_alive?
+      FFI::client_keep_alive?(self)
     end
   end
   

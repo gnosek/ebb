@@ -54,7 +54,7 @@ struct ebb_client {
   ev_io read_watcher;
   size_t read, nread_from_body;
   
-  char upload_file_filename[200];
+  char upload_filename[200];
   FILE *upload_file;
   
   ev_io write_watcher;
@@ -62,7 +62,7 @@ struct ebb_client {
   size_t written;
   
   ev_timer timeout_watcher;
-  
+  unsigned int keep_alive : 1;
   unsigned int status_written : 1;
   unsigned int headers_written : 1;
   unsigned int body_written : 1;
