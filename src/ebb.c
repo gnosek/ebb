@@ -130,7 +130,8 @@ static void* read_body_into_file(void *_client)
   
   /* set blocking socket */
   int flags = fcntl(client->fd, F_GETFL, 0);
-  assert(0 <= fcntl(client->fd, F_SETFL, flags & ~O_NONBLOCK));
+  int ret = fcntl(client->fd, F_SETFL, flags & ~O_NONBLOCK);
+  assert(0 <= ret);
   
   sprintf(client->upload_filename, "/tmp/ebb_upload_%010d", id++);
   tmpfile = fopen(client->upload_filename, "w+");
@@ -229,7 +230,8 @@ static void on_client_readable(struct ev_loop *loop, ev_io *watcher, int revents
       /* read body into file - in a thread */
       ev_io_stop(loop, watcher);
       pthread_t thread;
-      assert(0 <= pthread_create(&thread, NULL, read_body_into_file, client));
+      int ret = pthread_create(&thread, NULL, read_body_into_file, client);
+      assert(0 <= ret);
       pthread_detach(thread);
       return;
     }
